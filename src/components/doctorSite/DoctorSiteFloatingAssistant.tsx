@@ -64,6 +64,7 @@ export const DoctorSiteFloatingAssistant: React.FC<Props> = ({
   ]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const isSendingVoiceRef = useRef(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -183,9 +184,11 @@ export const DoctorSiteFloatingAssistant: React.FC<Props> = ({
   };
 
   const handleSendVoice = async (blob: Blob, base64: string, durationSec: number, mimeType: string) => {
+    if (isSendingVoiceRef.current || isLoading) return;
+    isSendingVoiceRef.current = true;
     setIsRecordingVoice(false);
     const localAudioUrl = URL.createObjectURL(blob);
-    const voiceMsgId = `voice-${Date.now()}`;
+    const voiceMsgId = `voice-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
     const userVoiceMsg: Message = {
       id: voiceMsgId,
@@ -197,7 +200,10 @@ export const DoctorSiteFloatingAssistant: React.FC<Props> = ({
       isVoiceMessage: true
     };
 
-    setMessages(prev => [...prev, userVoiceMsg]);
+    setMessages(prev => {
+      if (prev.some(m => m.id === voiceMsgId)) return prev;
+      return [...prev, userVoiceMsg];
+    });
     setIsLoading(true);
 
     try {
@@ -226,7 +232,7 @@ export const DoctorSiteFloatingAssistant: React.FC<Props> = ({
           audioBase64: base64,
           mimeType,
           doctorContext,
-          history: messages.slice(-6).map(m => ({ role: m.sender === 'user' ? 'user' : 'assistant', text: m.userTranscript || m.text }))
+          history: [...messages, userVoiceMsg].slice(-6).map(m => ({ role: m.sender === 'user' ? 'user' : 'assistant', text: m.userTranscript || m.text }))
         })
       });
 
@@ -245,7 +251,10 @@ export const DoctorSiteFloatingAssistant: React.FC<Props> = ({
         throw new Error('API response not ok');
       }
 
+      const aiMsgId = `ai-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
       setMessages(prev => {
+        if (prev.some(m => m.id === aiMsgId)) return prev;
+
         const updated = prev.map(m => {
           if (m.id === voiceMsgId) {
             return {
@@ -260,7 +269,7 @@ export const DoctorSiteFloatingAssistant: React.FC<Props> = ({
         return [
           ...updated,
           {
-            id: `ai-${Date.now()}`,
+            id: aiMsgId,
             sender: 'ai',
             text: aiText,
             timestamp: new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
@@ -283,6 +292,7 @@ export const DoctorSiteFloatingAssistant: React.FC<Props> = ({
       ]);
     } finally {
       setIsLoading(false);
+      isSendingVoiceRef.current = false;
     }
   };
 
@@ -451,7 +461,7 @@ export const DoctorSiteFloatingAssistant: React.FC<Props> = ({
           </div>
 
           {/* Input Bar */}
-          <div className="p-2.5 bg-white border-t border-slate-200">
+          <div className="p-2 sm:p-2.5 bg-white border-t border-slate-200 max-w-full overflow-hidden">
             {isRecordingVoice ? (
               <VoiceRecorder
                 onSendVoice={handleSendVoice}
@@ -464,31 +474,31 @@ export const DoctorSiteFloatingAssistant: React.FC<Props> = ({
                   e.preventDefault();
                   handleSendMessage();
                 }}
-                className="flex items-center gap-2"
+                className="flex items-center gap-1.5 sm:gap-2"
               >
                 <input
                   type="text"
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   placeholder="سؤالتان را بنویسید یا ویس ارسال فرمایید..."
-                  className="flex-1 px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-hidden focus:border-blue-600 focus:bg-white transition-colors"
+                  className="flex-1 min-w-0 px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-hidden focus:border-blue-600 focus:bg-white transition-colors"
                 />
                 <button
                   type="button"
                   onClick={() => setIsRecordingVoice(true)}
                   disabled={isLoading}
                   title="ارسال پیام صوتی (ویس)"
-                  className="p-2.5 rounded-xl border border-blue-200 text-blue-600 hover:bg-blue-50 active:scale-95 disabled:opacity-50 transition-colors cursor-pointer shrink-0"
+                  className="w-10 h-10 flex items-center justify-center rounded-xl border border-blue-200 text-blue-600 hover:bg-blue-600 hover:text-white active:scale-95 disabled:opacity-50 transition-all cursor-pointer shrink-0"
                 >
                   <Mic className="w-4 h-4" />
                 </button>
                 <button
                   type="submit"
                   disabled={!input.trim() || isLoading}
-                  className="p-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer shrink-0"
+                  className="w-10 h-10 flex items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer shrink-0"
                   aria-label="ارسال پیام"
                 >
-                  <Send className="w-4 h-4" />
+                  <Send className="w-4 h-4 rotate-180" />
                 </button>
               </form>
             )}

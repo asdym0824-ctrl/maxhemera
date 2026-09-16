@@ -38,10 +38,17 @@ export const FloatingAiAssistant: React.FC<{ onNavigateToDoctors?: () => void; o
   const [isLoading, setIsLoading] = useState(false);
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const isSendingVoiceRef = useRef(false);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isOpen, isRecordingVoice]);
+
+  useEffect(() => {
+    const handleOpenAi = () => setIsOpen(true);
+    window.addEventListener('open-ai-assistant', handleOpenAi);
+    return () => window.removeEventListener('open-ai-assistant', handleOpenAi);
+  }, []);
 
   const handleReset = () => {
     setActiveSpecialtyId(null);
@@ -111,22 +118,25 @@ export const FloatingAiAssistant: React.FC<{ onNavigateToDoctors?: () => void; o
   };
 
   const handleSendVoice = async (blob: Blob, base64: string, durationSec: number, mimeType: string) => {
+    if (isSendingVoiceRef.current || isLoading) return;
+    isSendingVoiceRef.current = true;
     setIsRecordingVoice(false);
     const localAudioUrl = URL.createObjectURL(blob);
-    const voiceMsgId = `voice-${Date.now()}`;
+    const voiceMsgId = `voice-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
-    const newHistory: Message[] = [
-      ...messages,
-      {
-        id: voiceMsgId,
-        sender: 'user',
-        text: '🎙️ در حال پردازش پیام صوتی...',
-        audioUrl: localAudioUrl,
-        audioDuration: durationSec,
-        isVoiceMessage: true
-      }
-    ];
-    setMessages(newHistory);
+    const userVoiceMsg: Message = {
+      id: voiceMsgId,
+      sender: 'user',
+      text: '🎙️ در حال پردازش پیام صوتی...',
+      audioUrl: localAudioUrl,
+      audioDuration: durationSec,
+      isVoiceMessage: true
+    };
+
+    setMessages(prev => {
+      if (prev.some(m => m.id === voiceMsgId)) return prev;
+      return [...prev, userVoiceMsg];
+    });
     setIsLoading(true);
 
     try {
@@ -135,7 +145,7 @@ export const FloatingAiAssistant: React.FC<{ onNavigateToDoctors?: () => void; o
       const response = await askCareNavigator({
         audioBase64: base64,
         mimeType,
-        history: newHistory.map(m => ({
+        history: [...messages, userVoiceMsg].map(m => ({
           sender: m.sender,
           text: m.userTranscript || m.text,
           specialtyId: m.specialtyId,
@@ -150,7 +160,10 @@ export const FloatingAiAssistant: React.FC<{ onNavigateToDoctors?: () => void; o
       }
 
       // Update user message with Persian transcript from Gemini
+      const aiResponseId = `ai-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
       setMessages(prev => {
+        if (prev.some(m => m.id === aiResponseId)) return prev;
+
         const updated = prev.map(m => {
           if (m.id === voiceMsgId) {
             return {
@@ -165,7 +178,7 @@ export const FloatingAiAssistant: React.FC<{ onNavigateToDoctors?: () => void; o
         return [
           ...updated,
           {
-            id: `ai-${Date.now()}`,
+            id: aiResponseId,
             sender: 'ai',
             text: response.reply,
             emergency: response.emergency,
@@ -186,6 +199,7 @@ export const FloatingAiAssistant: React.FC<{ onNavigateToDoctors?: () => void; o
       ]);
     } finally {
       setIsLoading(false);
+      isSendingVoiceRef.current = false;
     }
   };
 
@@ -384,7 +398,7 @@ export const FloatingAiAssistant: React.FC<{ onNavigateToDoctors?: () => void; o
           </div>
 
           {/* Input Footer with Voice & Text input */}
-          <div className="p-2.5 bg-white border-t border-slate-200">
+          <div className="p-2 sm:p-2.5 bg-white border-t border-slate-200 max-w-full overflow-hidden">
             {isRecordingVoice ? (
               <VoiceRecorder
                 onSendVoice={handleSendVoice}
@@ -392,7 +406,7 @@ export const FloatingAiAssistant: React.FC<{ onNavigateToDoctors?: () => void; o
                 disabled={isLoading}
               />
             ) : (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2">
                 <input
                   type="text"
                   id="care-navigator-text-input"
@@ -400,17 +414,21 @@ export const FloatingAiAssistant: React.FC<{ onNavigateToDoctors?: () => void; o
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleSend()}
                   placeholder="علائم خود را بنویسید یا دکمه ویس را بزنید..."
-                  className="flex-1 text-xs px-3 py-2.5 bg-slate-100 rounded-xl outline-hidden focus:ring-2 focus:ring-blue-600/30 text-slate-800"
+                  className="flex-1 min-w-0 text-xs px-3 py-2.5 bg-slate-100 rounded-xl outline-hidden focus:ring-2 focus:ring-blue-600/30 text-slate-800"
                 />
                 <button
                   type="button"
                   id="btn-voice-record-start"
-                  onClick={() => setIsRecordingVoice(true)}
-                  disabled={isLoading}
-                  title="ارسال پیام صوتی (ویس)"
-                  className="p-2.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 active:scale-95 disabled:opacity-50 rounded-xl transition-all cursor-pointer border border-blue-100 flex items-center justify-center shrink-0"
+                  onClick={() => {
+                    if (isLoading || isRecordingVoice) return;
+                    setIsRecordingVoice(true);
+                  }}
+                  disabled={isLoading || isRecordingVoice}
+                  title="ضبط و ارسال پیام صوتی (ویس)"
+                  aria-label="شروع ضبط پیام صوتی"
+                  className="w-10 h-10 bg-blue-50 hover:bg-blue-600 text-blue-600 hover:text-white active:scale-95 disabled:opacity-40 disabled:pointer-events-none rounded-xl transition-all duration-200 cursor-pointer border border-blue-200 hover:border-blue-600 shadow-2xs flex items-center justify-center shrink-0 group relative focus:outline-hidden focus:ring-2 focus:ring-blue-600/30"
                 >
-                  <Mic className="w-4 h-4" />
+                  <Mic className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />
                 </button>
                 <button
                   type="button"
@@ -418,7 +436,7 @@ export const FloatingAiAssistant: React.FC<{ onNavigateToDoctors?: () => void; o
                   onClick={() => handleSend()}
                   disabled={isLoading || !input.trim()}
                   title="ارسال پیام متنی"
-                  className="p-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl transition-colors cursor-pointer shrink-0"
+                  className="w-10 h-10 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl transition-colors cursor-pointer flex items-center justify-center shrink-0"
                 >
                   <Send className="w-4 h-4 rotate-180" />
                 </button>

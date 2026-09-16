@@ -1417,20 +1417,35 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="sm:hidden">نوبت</span>
           </button>
 
-          {/* Mobile & Tablet Menu Toggle Button */}
+          {/* Mobile & Tablet Menu Toggle Button (Specialized for Smartphone Users) */}
           <button
             id="mobile-menu-toggle-btn"
+            type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="xl:hidden p-1.5 sm:px-3 sm:py-2 text-slate-700 hover:text-blue-600 active:scale-95 hover:bg-blue-50/80 rounded-xl cursor-pointer shrink-0 transition-all border border-slate-200/80 shadow-2xs flex items-center justify-center gap-1.5"
-            aria-label="منوی اصلی و ناوبری صفحات"
-            title="منوی ناوبری صفحات کلینیک"
+            className={`xl:hidden relative min-w-[42px] min-h-[42px] p-2 sm:px-3 sm:py-2 rounded-xl cursor-pointer shrink-0 transition-all duration-200 border flex items-center justify-center gap-1.5 active:scale-95 shadow-2xs select-none ${
+              mobileMenuOpen
+                ? 'bg-rose-50 border-rose-300 text-rose-700 shadow-sm ring-2 ring-rose-200/60'
+                : 'bg-slate-50/90 hover:bg-blue-50 text-slate-800 hover:text-blue-700 border-slate-200/90 hover:border-blue-200'
+            }`}
+            aria-label={mobileMenuOpen ? 'بستن منوی ناوبری' : 'باز کردن منوی ناوبری و خدمات کلینیک'}
+            aria-expanded={mobileMenuOpen}
+            title={mobileMenuOpen ? 'بستن منو' : 'منوی ناوبری و دسترسی سریع به بخش‌های کلینیک'}
           >
             {mobileMenuOpen ? (
               <X className="w-5 h-5 text-rose-600 transition-transform duration-200 rotate-90" />
             ) : (
-              <Menu className="w-5 h-5 text-slate-800 transition-transform duration-200" />
+              <>
+                <Menu className="w-5 h-5 text-slate-800 transition-transform duration-200" />
+                {/* Mobile Active Clinic / Pulse Dot */}
+                <span className="sm:hidden absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 border border-white" />
+                </span>
+              </>
             )}
-            <span className="hidden sm:inline text-xs font-bold text-slate-700">منو</span>
+            <span className="hidden sm:inline text-xs font-bold text-slate-800">
+              {mobileMenuOpen ? 'بستن' : 'منو'}
+            </span>
           </button>
         </div>
       </div>

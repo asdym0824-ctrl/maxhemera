@@ -20,9 +20,15 @@ export const VoiceMessagePlayer: React.FC<VoiceMessagePlayerProps> = ({
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [audioDuration, setAudioDuration] = useState(duration);
+  const [audioDuration, setAudioDuration] = useState(duration || 0);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    if (duration > 0) {
+      setAudioDuration(duration);
+    }
+  }, [duration]);
 
   useEffect(() => {
     if (audioUrl) {
@@ -30,7 +36,7 @@ export const VoiceMessagePlayer: React.FC<VoiceMessagePlayerProps> = ({
       audioRef.current = audio;
 
       audio.onloadedmetadata = () => {
-        if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
+        if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 0) {
           setAudioDuration(Math.round(audio.duration));
         }
       };

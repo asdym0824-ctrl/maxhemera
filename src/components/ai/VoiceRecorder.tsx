@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, Square, Trash2, Send, AlertCircle, Volume2 } from 'lucide-react';
+import { Trash2, Send, AlertCircle } from 'lucide-react';
 
 interface VoiceRecorderProps {
   onSendVoice: (blob: Blob, base64: string, durationSec: number, mimeType: string) => void;
@@ -14,16 +14,22 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
-  const [audioLevel, setAudioLevel] = useState<number[]>(new Array(14).fill(15));
+  const [audioLevel, setAudioLevel] = useState<number[]>(new Array(10).fill(20));
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioStreamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
+  const startTimeRef = useRef<number>(0);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const isMountedRef = useRef(true);
+  const hasSentRef = useRef(false);
+  const recordSessionIdRef = useRef(0);
 
   // Pick best supported MIME type
   const getMimeType = (): string => {
@@ -36,8 +42,12 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
       'audio/aac'
     ];
     for (const type of types) {
-      if (MediaRecorder.isTypeSupported(type)) {
-        return type;
+      try {
+        if (MediaRecorder.isTypeSupported(type)) {
+          return type;
+        }
+      } catch {
+        // continue
       }
     }
     return 'audio/webm';
@@ -57,7 +67,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     });
   };
 
-  // Stop tracks and clean up resources
+  // Completely clean up streams, nodes, and tracks to prevent microphone locking & echo
   const cleanupStream = () => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -67,10 +77,25 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
     }
-    if (audioStreamRef.current) {
-      audioStreamRef.current.getTracks().forEach(track => track.stop());
-      audioStreamRef.current = null;
+
+    if (sourceNodeRef.current) {
+      try {
+        sourceNodeRef.current.disconnect();
+      } catch {
+        // ignore
+      }
+      sourceNodeRef.current = null;
     }
+
+    if (analyserRef.current) {
+      try {
+        analyserRef.current.disconnect();
+      } catch {
+        // ignore
+      }
+      analyserRef.current = null;
+    }
+
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
       try {
         audioContextRef.current.close();
@@ -79,48 +104,113 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
       }
       audioContextRef.current = null;
     }
+
+    // Stop and release recording stream tracks
+    if (audioStreamRef.current) {
+      audioStreamRef.current.getTracks().forEach(track => {
+        try {
+          track.stop();
+          track.enabled = false;
+        } catch {
+          // ignore
+        }
+      });
+      audioStreamRef.current = null;
+    }
+
+    if (mediaRecorderRef.current) {
+      if (mediaRecorderRef.current.state !== 'inactive') {
+        try {
+          mediaRecorderRef.current.stop();
+        } catch {
+          // ignore
+        }
+      }
+      mediaRecorderRef.current = null;
+    }
   };
 
   const startRecording = async () => {
     setErrorMessage(null);
     audioChunksRef.current = [];
     setRecordingTime(0);
+    hasSentRef.current = false;
+    setIsSubmitting(false);
+
+    // Cancel any active TTS speech or audio playback to prevent acoustic feedback
+    if (typeof window !== 'undefined') {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      try {
+        document.querySelectorAll('audio').forEach(audioEl => {
+          audioEl.pause();
+        });
+      } catch {
+        // ignore
+      }
+    }
+
+    const currentSessionId = ++recordSessionIdRef.current;
 
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error('مرورگر شما از ضبط صدا پشتیبانی نمی‌کند.');
       }
 
+      cleanupStream();
+
+      // High-quality mono audio capture with hardware noise suppression
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
+          channelCount: { ideal: 1 },
+          sampleRate: { ideal: 48000 },
+          echoCancellation: { ideal: true },
+          noiseSuppression: { ideal: true },
+          autoGainControl: { ideal: true }
         }
       });
+
+      // Guard: if unmounted or another session started while acquiring media
+      if (!isMountedRef.current || currentSessionId !== recordSessionIdRef.current) {
+        stream.getTracks().forEach(t => {
+          t.stop();
+          t.enabled = false;
+        });
+        return;
+      }
+
       audioStreamRef.current = stream;
 
-      // Audio analysis for real-time waveform animation
+      // Single hardware stream analysis (NO stream.clone() to prevent mic hardware ducking)
       try {
         const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
         if (AudioContextClass) {
           const audioCtx = new AudioContextClass();
           audioContextRef.current = audioCtx;
+          if (audioCtx.state === 'suspended') {
+            await audioCtx.resume();
+          }
+
           const source = audioCtx.createMediaStreamSource(stream);
+          sourceNodeRef.current = source;
+
           const analyser = audioCtx.createAnalyser();
           analyser.fftSize = 64;
+          analyser.smoothingTimeConstant = 0.75;
+          // Connect ONLY to analyser; never connect to speakers or destination!
           source.connect(analyser);
           analyserRef.current = analyser;
 
           const dataArray = new Uint8Array(analyser.frequencyBinCount);
           const updateAudioLevels = () => {
-            if (!analyserRef.current) return;
+            if (!analyserRef.current || !isMountedRef.current || currentSessionId !== recordSessionIdRef.current) return;
             analyserRef.current.getByteFrequencyData(dataArray);
             
-            // Map frequencies to 14 bars with normalized heights (15% to 100%)
+            // Map frequencies to 10 compact visualizer bars
             const bars: number[] = [];
-            const step = Math.floor(dataArray.length / 14);
-            for (let i = 0; i < 14; i++) {
+            const step = Math.max(1, Math.floor(dataArray.length / 10));
+            for (let i = 0; i < 10; i++) {
               const val = dataArray[i * step] || 0;
               const percent = Math.min(100, Math.max(15, Math.round((val / 255) * 100)));
               bars.push(percent);
@@ -131,11 +221,23 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
           updateAudioLevels();
         }
       } catch (audioErr) {
-        console.warn('AudioContext visualization not available:', audioErr);
+        console.warn('AudioContext analysis not available:', audioErr);
       }
 
       const selectedMime = getMimeType();
-      const recorder = new MediaRecorder(stream, { mimeType: selectedMime });
+      const recorderOptions: MediaRecorderOptions = {
+        audioBitsPerSecond: 128000
+      };
+      if (selectedMime) {
+        recorderOptions.mimeType = selectedMime;
+      }
+
+      let recorder: MediaRecorder;
+      try {
+        recorder = new MediaRecorder(stream, recorderOptions);
+      } catch {
+        recorder = new MediaRecorder(stream);
+      }
       mediaRecorderRef.current = recorder;
 
       recorder.ondataavailable = (event) => {
@@ -144,20 +246,20 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
         }
       };
 
-      recorder.start(250); // collect in 250ms chunks
+      // Start recording with continuous 250ms chunks to ensure complete capture
+      startTimeRef.current = Date.now();
+      recorder.start(250);
       setIsRecording(true);
 
       // Start elapsed timer
       timerRef.current = window.setInterval(() => {
-        setRecordingTime(prev => {
-          if (prev >= 119) {
-            // Auto-stop at 2 minutes
-            stopAndSend();
-            return 120;
-          }
-          return prev + 1;
-        });
-      }, 1000);
+        if (!isMountedRef.current || currentSessionId !== recordSessionIdRef.current) return;
+        const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
+        setRecordingTime(elapsed);
+        if (elapsed >= 120) {
+          stopAndSend();
+        }
+      }, 500);
 
     } catch (err: unknown) {
       console.error('Microphone access failed:', err);
@@ -172,52 +274,72 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
     }
   };
 
-  const stopAndSend = async () => {
-    if (!mediaRecorderRef.current || !isRecording) return;
+  const stopAndSend = () => {
+    // Prevent duplicate sending
+    if (hasSentRef.current || isSubmitting) return;
+    if (!mediaRecorderRef.current) return;
 
     const recorder = mediaRecorderRef.current;
+    if (recorder.state === 'inactive') return;
+
+    hasSentRef.current = true;
+    setIsSubmitting(true);
+
     const mimeType = recorder.mimeType || 'audio/webm';
-    const finalDuration = recordingTime;
+    const durationSec = Math.max(1, Math.round((Date.now() - startTimeRef.current) / 1000));
 
     recorder.onstop = async () => {
       try {
-        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        const chunks = [...audioChunksRef.current];
+        audioChunksRef.current = [];
+        const audioBlob = new Blob(chunks, { type: mimeType });
+
         cleanupStream();
         setIsRecording(false);
 
-        if (audioBlob.size < 100 && finalDuration < 1) {
-          setErrorMessage('طول پیام صوتی بسیار کوتاه بود. لطفاً دوباره صحبت کنید.');
+        if (audioBlob.size < 80) {
+          setErrorMessage('پیام صوتی دریافت نشد. لطفاً بلندتر صحبت فرمایید.');
+          hasSentRef.current = false;
+          setIsSubmitting(false);
           return;
         }
 
+        console.log(`[VoiceRecorder] Voice captured: ${audioBlob.size} bytes, ${durationSec}s, ${mimeType}`);
         const base64 = await blobToBase64(audioBlob);
-        onSendVoice(audioBlob, base64, Math.max(1, finalDuration), mimeType);
+        onSendVoice(audioBlob, base64, durationSec, mimeType);
       } catch (processErr) {
         console.error('Error processing audio blob:', processErr);
         setErrorMessage('خطا در پردازش پیام صوتی.');
+        hasSentRef.current = false;
+        setIsSubmitting(false);
       }
     };
 
-    recorder.stop();
+    try {
+      recorder.stop();
+    } catch (err) {
+      console.warn('Recorder stop error:', err);
+      cleanupStream();
+      setIsRecording(false);
+      setIsSubmitting(false);
+      hasSentRef.current = false;
+    }
   };
 
   const handleCancel = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      try {
-        mediaRecorderRef.current.stop();
-      } catch {
-        // ignore
-      }
-    }
+    hasSentRef.current = true;
+    setIsSubmitting(false);
     cleanupStream();
     setIsRecording(false);
     onCancel();
   };
 
   useEffect(() => {
-    // Automatically start recording when mounted
+    isMountedRef.current = true;
+    hasSentRef.current = false;
     startRecording();
     return () => {
+      isMountedRef.current = false;
       cleanupStream();
     };
   }, []);
@@ -229,84 +351,88 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
   };
 
   return (
-    <div id="ai-voice-recorder-bar" className="w-full bg-slate-50 border border-blue-200 rounded-2xl p-2.5 flex flex-col gap-2 shadow-xs transition-all animate-fadeIn">
+    <div
+      id="ai-voice-recorder-bar"
+      className="w-full max-w-full overflow-hidden box-border bg-slate-50 border border-blue-200 rounded-2xl p-2 sm:p-2.5 flex flex-col gap-1.5 shadow-2xs transition-all animate-fadeIn"
+    >
       {errorMessage ? (
-        <div className="flex items-center justify-between gap-2 p-2 bg-red-50 text-red-700 text-xs rounded-xl">
-          <div className="flex items-center gap-1.5">
+        <div className="flex items-center justify-between gap-2 p-1.5 bg-red-50 text-red-700 text-xs rounded-xl">
+          <div className="flex items-center gap-1.5 min-w-0">
             <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
-            <span>{errorMessage}</span>
+            <span className="truncate">{errorMessage}</span>
           </div>
           <button
             onClick={handleCancel}
-            className="px-2 py-1 bg-red-100 hover:bg-red-200 rounded-lg text-[11px] font-medium transition-colors cursor-pointer"
+            className="px-2 py-1 bg-red-100 hover:bg-red-200 rounded-lg text-[11px] font-medium transition-colors cursor-pointer shrink-0"
           >
             بستن
           </button>
         </div>
       ) : (
-        <div className="flex items-center justify-between gap-2">
-          {/* Cancel button */}
+        <div className="flex items-center justify-between gap-1.5 sm:gap-2 w-full max-w-full overflow-hidden">
+          {/* Cancel button - right side (RTL) */}
           <button
             type="button"
             id="btn-voice-cancel"
             onClick={handleCancel}
             title="انصراف و حذف ویس"
-            disabled={disabled}
-            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors cursor-pointer"
+            disabled={disabled || isSubmitting}
+            className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors cursor-pointer shrink-0"
           >
             <Trash2 className="w-4 h-4" />
           </button>
 
-          {/* Recording pulse & time */}
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5">
-              <span className="relative flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-              </span>
-              <span className="font-mono text-xs font-semibold text-slate-700 tracking-wider">
-                {formatTime(recordingTime)}
-              </span>
-            </div>
-            <span className="text-[11px] text-slate-500 font-medium hidden sm:inline">
-              در حال شنیدن و ضبط...
+          {/* Recording indicator & timer */}
+          <div className="flex items-center gap-1.5 shrink-0 px-1">
+            <span className="relative flex h-2.5 w-2.5 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+            </span>
+            <span className="font-mono text-xs font-bold text-slate-800 tracking-wider">
+              {formatTime(recordingTime)}
             </span>
           </div>
 
-          {/* Live Waveform Audio Visualizer */}
-          <div className="flex-1 flex items-center justify-center gap-0.5 h-7 px-2 max-w-[140px] sm:max-w-[180px]">
+          {/* Compact soundwave visualizer (guaranteed to fit horizontally) */}
+          <div className="flex-1 min-w-[45px] max-w-[100px] flex items-center justify-center gap-0.5 h-6 px-1">
             {audioLevel.map((height, idx) => (
               <div
                 key={idx}
-                className="w-1 rounded-full bg-blue-500 transition-all duration-75"
+                className="w-1 rounded-full bg-blue-600 transition-all duration-75"
                 style={{
                   height: `${height}%`,
-                  opacity: 0.4 + (height / 100) * 0.6
+                  opacity: 0.35 + (height / 100) * 0.65
                 }}
               />
             ))}
           </div>
 
-          {/* Finish & Send Voice Button */}
+          {/* Finish & Send Voice Button - strictly sized, no overflow */}
           <button
             type="button"
             id="btn-voice-send"
             onClick={stopAndSend}
-            disabled={disabled || recordingTime < 1}
-            title="ارسال پیام صوتی به هوش مصنوعی"
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-xs transition-all cursor-pointer"
+            disabled={disabled || isSubmitting}
+            title="تکمیل و ارسال پیام صوتی"
+            className="flex items-center justify-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 active:scale-95 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-xs transition-all cursor-pointer shrink-0 whitespace-nowrap"
           >
-            <span>ارسال ویس</span>
-            <Send className="w-3.5 h-3.5 rotate-180" />
+            {isSubmitting ? (
+              <span className="text-[11px]">ارسال...</span>
+            ) : (
+              <>
+                <span className="text-[11px] font-medium">ارسال</span>
+                <Send className="w-3.5 h-3.5 rotate-180" />
+              </>
+            )}
           </button>
         </div>
       )}
 
-      {/* Helpful Hint */}
+      {/* Subtle compact instruction hint */}
       {!errorMessage && (
-        <div className="flex items-center justify-between text-[10px] text-slate-400 px-1">
-          <span>علائم بیماری، درد یا سوال پزشکی خود را بفرمایید</span>
-          <span>حداکثر ۲ دقیقه</span>
+        <div className="flex items-center justify-between text-[10px] text-slate-400 px-1 border-t border-slate-200/60 pt-1">
+          <span className="truncate">در حال ضبط صدا... پس از اتمام دکمه ارسال را بزنید</span>
+          <span className="shrink-0 text-slate-400 font-mono">حداکثر ۲:۰۰</span>
         </div>
       )}
     </div>

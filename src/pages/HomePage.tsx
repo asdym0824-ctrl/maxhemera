@@ -44,6 +44,8 @@ import { MedicalPulseDivider } from '../components/common/medicalPattern/Medical
 import { DnaHelixWatermark } from '../components/common/medicalPattern/DnaHelixWatermark';
 import { ClinicalCornerAccents } from '../components/common/medicalPattern/ClinicalCardAccent';
 import { MedicalVectorPattern } from '../components/common/medicalPattern/MedicalVectorPattern';
+import { MobileDoctoretoReviews, PatientReview } from '../components/reviews/MobileDoctoretoReviews';
+import { MobileDoctoretoArticles } from '../components/health/MobileDoctoretoArticles';
 
 interface HomePageProps {
   doctors: Doctor[];
@@ -75,9 +77,25 @@ export const HomePage: React.FC<HomePageProps> = ({
   const [visibleDoctorsCount, setVisibleDoctorsCount] = useState<number>(4);
   const [isSpecialtiesModalOpen, setIsSpecialtiesModalOpen] = useState(false);
   const [selectedServiceCategory, setSelectedServiceCategory] = useState<string>('all');
+  const [mobileServiceView, setMobileServiceView] = useState<'carousel' | 'list'>('carousel');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [branches, setBranches] = useState<ClinicBranch[]>([]);
   const [selectedInsurance, setSelectedInsurance] = useState('all');
+
+  const availableServiceCategories = useMemo(() => {
+    const cats = new Set<string>();
+    services.forEach(s => {
+      if (s.category) cats.add(s.category);
+    });
+    return Array.from(cats);
+  }, [services]);
+
+  const filteredServices = useMemo(() => {
+    if (selectedServiceCategory === 'all') {
+      return services;
+    }
+    return services.filter(s => s.category === selectedServiceCategory);
+  }, [services, selectedServiceCategory]);
 
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
@@ -171,30 +189,76 @@ export const HomePage: React.FC<HomePageProps> = ({
     { id: 'pasargad', name: 'بیمه پاسارگاد', discount: 'صدور الکترونیک خسارت', type: 'تکمیلی' },
   ];
 
-  const patientReviews = [
+  const patientReviews: PatientReview[] = [
     {
       id: 'r1',
       name: 'مریم صالحی',
-      doctor: 'دکتر مریم سعادت (فوق تخصص قلب)',
+      doctor: 'دکتر مریم سعادت',
+      specialty: 'فوق تخصص قلب و عروق',
+      visitType: 'ویزیت حضوری • شعبه سعادت‌آباد',
+      service: 'اکوکاردیوگرافی و نوار قلب',
       comment: 'دقت و آرامش دکتر فوق‌العاده بود. نوبت آنلاین بدون معطلی و در زمان مشخص انجام شد. سیستم پرونده سلامت هم خیلی کار را راحت کرده.',
       rating: 5,
-      date: '۲ روز پیش'
+      date: '۲ روز پیش',
+      helpfulCount: 24,
+      recommended: true,
+      initial: 'م'
     },
     {
       id: 'r2',
       name: 'علیرضا رضایی',
-      doctor: 'دکتر سهراب مرادی (متخصص ارتوپدی)',
+      doctor: 'دکتر سهراب مرادی',
+      specialty: 'متخصص جراحی ارتوپدی',
+      visitType: 'ویزیت تصویری آنلاین',
+      service: 'مشاوره مفاصل و زانو',
       comment: 'امکان ویزیت تصویری آنلاین برای من که در شهرستان بودم نجات‌بخش بود. نسخه الکترونیک بلافاصله در سامانه ثبت شد و پیامک تایید دریافت کردم.',
       rating: 5,
-      date: 'هفته گذشته'
+      date: '۴ روز پیش',
+      helpfulCount: 19,
+      recommended: true,
+      initial: 'ع'
     },
     {
       id: 'r3',
       name: 'فاطمه ناصری',
-      doctor: 'دکتر نسترن کمالی (متخصص پوست)',
-      comment: 'کلینیک شعبه سعادت‌آباد بسیار مجهز، تمیز و با پرسنل پاسخگو بود. با بیمه دانا پذیرش شدم و بدون نیاز به مدارک کاغذی ویزیت شدم.',
+      doctor: 'دکتر نسترن کمالی',
+      specialty: 'متخصص پوست، مو و زیبایی',
+      visitType: 'ویزیت حضوری • شعبه ونک',
+      service: 'لیزر و پاکسازی تخصصی',
+      comment: 'کلینیک شعبه ونک بسیار مجهز، تمیز و با پرسنل پاسخگو بود. با بیمه تکمیلی دانا پذیرش شدم و بدون معطلی ویزیت شدم.',
       rating: 5,
-      date: '۳ روز پیش'
+      date: 'هفته گذشته',
+      helpfulCount: 31,
+      recommended: true,
+      initial: 'ف'
+    },
+    {
+      id: 'r4',
+      name: 'حسین محمدپور',
+      doctor: 'دکتر بهاره رادمنش',
+      specialty: 'فوق تخصص گوارش و کبد',
+      visitType: 'ویزیت حضوری • شعبه تجریش',
+      service: 'آندوسکوپی و چکاپ گوارشی',
+      comment: 'دکتر بسیار باحوصله شرح حال گرفتن و هیچ استرسی به بیمار وارد نمیکنن. فضای درمانگاه بسیار تمیز و منظم و نوبت‌دهی سر ساعت بود.',
+      rating: 5,
+      date: '۵ روز پیش',
+      helpfulCount: 17,
+      recommended: true,
+      initial: 'ح'
+    },
+    {
+      id: 'r5',
+      name: 'زهرا مرادیان',
+      doctor: 'دکتر کامران احمدی',
+      specialty: 'متخصص مغز و اعصاب',
+      visitType: 'ویزیت تصویری آنلاین',
+      service: 'نوار مغز و کنترل میگرن',
+      comment: 'مشاوره آنلاین با دکتر احمدی عالی بود. تمام سوالاتم رو با دقت جواب دادن و داروها رو در سامانه بیمه ثبت کردن. کاملاً راضی هستم.',
+      rating: 5,
+      date: '۱ هفته پیش',
+      helpfulCount: 28,
+      recommended: true,
+      initial: 'ز'
     }
   ];
 
@@ -1088,7 +1152,7 @@ export const HomePage: React.FC<HomePageProps> = ({
       {/* ======================================================== */}
       {/* 8. CLINIC PARACLINICAL & SPECIALIZED SERVICES */}
       {/* ======================================================== */}
-      <section className="bg-slate-900 text-white rounded-3xl p-6 sm:p-10 border border-slate-800 space-y-6 shadow-xl relative overflow-hidden">
+      <section className="bg-slate-900 text-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-10 border border-slate-800 space-y-3 sm:space-y-6 shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
         
         {/* Abstract DNA Watermark in Paraclinical Panel */}
@@ -1097,27 +1161,191 @@ export const HomePage: React.FC<HomePageProps> = ({
         {/* Matte Medical Vectors Pattern */}
         <MedicalVectorPattern opacity={0.045} variant="light" patternId="paraclinic-med-pattern" />
         
-        <div className="relative z-10 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="inline-flex items-center gap-1.5 text-indigo-400 bg-indigo-500/10 border border-indigo-400/20 px-3 py-1 rounded-full text-xs font-bold mb-2">
-              <Activity className="w-3.5 h-3.5" />
+        {/* Section Header: Compact & Fast on Mobile */}
+        <div className="relative z-10 flex items-center justify-between gap-2.5">
+          <div className="min-w-0">
+            <div className="inline-flex items-center gap-1 text-indigo-400 bg-indigo-500/10 border border-indigo-400/20 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[11px] sm:text-xs font-bold mb-1 sm:mb-2">
+              <Activity className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
               <span>دپارتمان پاراکلینیک و تشخیصی</span>
             </div>
-            <h2 className="text-xl sm:text-2xl font-black text-white">خدمات درمانی، آزمایشگاهی و چکاپ جامع</h2>
-            <p className="text-xs text-slate-300 mt-1">امکان رزرو آنلاین خدمات با تعرفه مصوب و بیمه تکمیلی</p>
+            <h2 className="text-base sm:text-2xl font-black text-white truncate">
+              خدمات درمانی و چکاپ جامع
+            </h2>
+            <p className="hidden sm:block text-xs text-slate-300 mt-1">
+              امکان رزرو آنلاین خدمات با تعرفه مصوب و بیمه تکمیلی
+            </p>
           </div>
+
           <button
             type="button"
             onClick={() => navigate('/services')}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-slate-800/90 hover:bg-slate-800 border border-slate-700 hover:border-slate-600 shadow-sm transition-all cursor-pointer select-none active:scale-[0.98]"
+            className="inline-flex items-center gap-1 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold text-white bg-slate-800/90 hover:bg-slate-800 border border-slate-700 hover:border-slate-600 shadow-sm transition-all cursor-pointer select-none active:scale-[0.98] shrink-0"
           >
-            <span>مشاهده کلیه خدمات ({services.length})</span>
-            <ChevronLeft className="w-4 h-4 text-slate-300 shrink-0" />
+            <span>همه ({services.length})</span>
+            <ChevronLeft className="w-3.5 h-3.5 text-slate-300 shrink-0" />
           </button>
         </div>
 
-        <div className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-5">
-          {services.slice(0, 3).map(srv => (
+        {/* Mobile Navigation Toolbar: Categories + View Switcher (Zero Unnecessary Scrolling) */}
+        <div className="relative z-10 sm:hidden flex items-center justify-between gap-2 pt-0.5">
+          {/* Scrollable Category Chips */}
+          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 text-[11px] flex-1 min-w-0">
+            <button
+              type="button"
+              onClick={() => setSelectedServiceCategory('all')}
+              className={`px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+                selectedServiceCategory === 'all'
+                  ? 'bg-indigo-600 text-white shadow-2xs'
+                  : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700'
+              }`}
+            >
+              همه ({services.length})
+            </button>
+            {availableServiceCategories.map(cat => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setSelectedServiceCategory(cat)}
+                className={`px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+                  selectedServiceCategory === cat
+                    ? 'bg-indigo-600 text-white shadow-2xs'
+                    : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          {/* View Mode Toggle: Slider vs Compact List */}
+          <div className="flex items-center bg-slate-800/90 border border-slate-700/80 rounded-lg p-0.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setMobileServiceView('carousel')}
+              className={`p-1 rounded-md transition-colors cursor-pointer ${
+                mobileServiceView === 'carousel' 
+                  ? 'bg-indigo-600 text-white' 
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="مشاهده اسلایدری افقی"
+              aria-label="مشاهده اسلایدری افقی"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileServiceView('list')}
+              className={`p-1 rounded-md transition-colors cursor-pointer ${
+                mobileServiceView === 'list' 
+                  ? 'bg-indigo-600 text-white' 
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="مشاهده فهرست فشرده"
+              aria-label="مشاهده فهرست فشرده"
+            >
+              <List className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* 1. MOBILE ONLY PRESENTATION (Takes ~170px instead of ~800px vertical space) */}
+        <div className="relative z-10 sm:hidden">
+          {mobileServiceView === 'carousel' ? (
+            /* Mode A: Horizontal Snap Carousel (No vertical scrolling!) */
+            <div className="space-y-1.5">
+              <div className="flex overflow-x-auto snap-x snap-mandatory no-scrollbar gap-2.5 pb-1 -mx-3.5 px-3.5">
+                {(filteredServices.length > 0 ? filteredServices : services).slice(0, 6).map(srv => (
+                  <div
+                    key={srv.id}
+                    className="w-[78vw] max-w-[270px] shrink-0 snap-start bg-slate-800/95 border border-slate-700/80 rounded-2xl p-3.5 flex flex-col justify-between shadow-md active:border-indigo-500/50 transition-all"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-1.5 mb-2">
+                        <div className="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold shrink-0">
+                          <Activity className="w-4 h-4" />
+                        </div>
+                        {srv.category && (
+                          <span className="text-[10px] bg-slate-700/80 text-indigo-200 px-2 py-0.5 rounded-md truncate max-w-[130px] font-medium">
+                            {srv.category}
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="font-extrabold text-sm text-white truncate">{srv.title}</h3>
+                      <p className="text-[11px] text-slate-300 line-clamp-2 leading-relaxed mt-1">
+                        {srv.description}
+                      </p>
+                    </div>
+
+                    <div className="pt-2.5 mt-2 border-t border-slate-700/80 flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <span className="text-[10px] text-slate-400 block leading-none">تعرفه مصوب:</span>
+                        <span className="font-black text-xs text-indigo-300 mt-0.5 block truncate">
+                          {srv.price.toLocaleString('fa-IR')} تومان
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/services/${srv.slug}`)}
+                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black transition-all shadow-xs active:scale-95 flex items-center gap-1 shrink-0 cursor-pointer"
+                      >
+                        <span>رزرو</span>
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Carousel Navigation Hint */}
+              <div className="flex items-center justify-between text-[10px] text-slate-400 px-1 pt-0.5">
+                <span>← برای مشاهده سایر خدمات به چپ بکشید</span>
+                <span className="text-indigo-300 font-bold">
+                  {Math.min(6, (filteredServices.length > 0 ? filteredServices : services).length)} خدمت فعال
+                </span>
+              </div>
+            </div>
+          ) : (
+            /* Mode B: Ultra-Compact 1-Tap List (Takes only ~150px total!) */
+            <div className="space-y-1.5">
+              {(filteredServices.length > 0 ? filteredServices : services).slice(0, 4).map(srv => (
+                <div
+                  key={srv.id}
+                  onClick={() => navigate(`/services/${srv.slug}`)}
+                  className="p-2.5 rounded-xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 flex items-center justify-between gap-2 cursor-pointer active:scale-[0.99] transition-all"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold shrink-0">
+                      <Activity className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="font-bold text-xs text-white truncate">{srv.title}</h3>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        {srv.category && (
+                          <span className="text-[9px] text-indigo-300 font-medium truncate">
+                            {srv.category}
+                          </span>
+                        )}
+                        <span className="text-slate-600 text-[8px]">•</span>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          {srv.price.toLocaleString('fa-IR')} ت
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <span className="px-2 py-1 bg-indigo-600/80 hover:bg-indigo-600 text-white rounded-lg text-[10px] font-bold shrink-0 flex items-center gap-0.5">
+                    <span>رزرو</span>
+                    <ChevronLeft className="w-3 h-3" />
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 2. DESKTOP ONLY PRESENTATION (Keeps the original full 3-column desktop layout) */}
+        <div className="relative z-10 hidden sm:grid sm:grid-cols-3 gap-5">
+          {(filteredServices.length > 0 ? filteredServices : services).slice(0, 3).map(srv => (
             <div key={srv.id} className="bg-slate-800/90 rounded-2xl p-5 border border-slate-700/80 space-y-4 shadow-sm hover:border-indigo-500/50 transition-all flex flex-col justify-between">
               <div className="space-y-3">
                 <div className="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold">
@@ -1147,10 +1375,10 @@ export const HomePage: React.FC<HomePageProps> = ({
       {/* ======================================================== */}
       {/* 9. PATIENT REVIEWS & TRUST TESTIMONIALS */}
       {/* ======================================================== */}
-      <section className="space-y-6">
+      <section className="space-y-4 sm:space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <Badge variant="emerald">نظرات و تجربیات</Badge>
+            <Badge variant="emerald">نظرات و تجربیات مراجعین</Badge>
             <h2 className="text-xl sm:text-2xl font-black text-slate-900 mt-1">دیدگاه مراجعین همرا کلینیک</h2>
           </div>
           <div className="flex items-center gap-1 text-xs text-slate-500">
@@ -1159,9 +1387,16 @@ export const HomePage: React.FC<HomePageProps> = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {patientReviews.map(r => (
-            <div key={r.id} className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs space-y-3 flex flex-col justify-between">
+        {/* 1. MOBILE ONLY: Animated Doctoreto-style Review Experience */}
+        <MobileDoctoretoReviews 
+          reviews={patientReviews} 
+          onNavigateDoctors={() => navigate('/doctors')} 
+        />
+
+        {/* 2. DESKTOP ONLY: Clean 3-Column Testimonial Grid */}
+        <div className="hidden sm:grid sm:grid-cols-3 gap-5">
+          {patientReviews.slice(0, 3).map(r => (
+            <div key={r.id} className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs space-y-3 flex flex-col justify-between hover:shadow-md transition-shadow">
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1 text-amber-500">
@@ -1178,7 +1413,9 @@ export const HomePage: React.FC<HomePageProps> = ({
               <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
                 <div>
                   <h4 className="font-bold text-xs text-slate-900">{r.name}</h4>
-                  <p className="text-[10px] text-blue-600 font-medium">{r.doctor}</p>
+                  <p className="text-[10px] text-blue-600 font-medium">
+                    {r.doctor} {r.specialty ? `(${r.specialty})` : ''}
+                  </p>
                 </div>
                 <span className="text-[10px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md font-medium border border-emerald-200">
                   بیمار تایید شده
@@ -1192,51 +1429,35 @@ export const HomePage: React.FC<HomePageProps> = ({
       {/* ======================================================== */}
       {/* 10. HEALTH LIBRARY ARTICLES */}
       {/* ======================================================== */}
-      <section className="space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <section className="space-y-4 sm:space-y-6">
+        <div className="flex items-center justify-between gap-3">
           <div>
             <Badge variant="slate">مجله سلامت همرا کلینیک</Badge>
-            <h2 className="text-xl sm:text-2xl font-black text-slate-900 mt-1">آخرین مقالات علمی و راهنماهای پزشکی</h2>
+            <h2 className="text-base sm:text-2xl font-black text-slate-900 mt-1">
+              آخرین مقالات علمی و راهنماهای پزشکی
+            </h2>
+            <p className="hidden sm:block text-xs text-slate-500 mt-0.5">
+              محتوای تخصصی به قلم پزشکان متخصص همراه با تاییدیه مراجع علمی
+            </p>
           </div>
           <Button
             variant="outline"
             size="sm"
             onClick={() => navigate('/health')}
-            icon={<ChevronLeft className="w-4 h-4" />}
+            icon={<ChevronLeft className="w-3.5 h-3.5" />}
             iconPosition="left"
+            className="text-xs shrink-0"
           >
-            آرشیو مجله سلامت ({articles.length})
+            <span>آرشیو مجله ({articles.length})</span>
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {articles.slice(0, 2).map(art => (
-            <div
-              key={art.id}
-              onClick={() => navigate(`/health/article/${art.slug}`)}
-              className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col sm:flex-row cursor-pointer group"
-            >
-              <img
-                src={art.coverImage}
-                alt={art.title}
-                className="w-full sm:w-48 h-44 object-cover shrink-0 group-hover:scale-105 transition-transform duration-300"
-              />
-              <div className="p-5 flex flex-col justify-between space-y-2 flex-1">
-                <div className="space-y-1.5">
-                  <Badge variant="blue" size="sm">{art.category}</Badge>
-                  <h3 className="font-bold text-sm sm:text-base text-slate-900 group-hover:text-blue-600 transition-colors line-clamp-2">
-                    {art.title}
-                  </h3>
-                  <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{art.summary}</p>
-                </div>
-                <div className="text-[11px] text-slate-400 font-medium flex items-center justify-between pt-2 border-t border-slate-100">
-                  <span>نویسنده: {art.authorDoctorName}</span>
-                  <span>زمان مطالعه: {art.readTimeMinutes} دقیقه</span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+        {/* Multi-Topic Horizontal Sliding Articles Showcase (Doctoreto Style for all device sizes) */}
+        <MobileDoctoretoArticles
+          articles={articles}
+          onSelectArticle={(art) => navigate(`/health/article/${art.slug}`)}
+          onViewAll={() => navigate('/health')}
+        />
       </section>
 
       {/* ======================================================== */}

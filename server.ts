@@ -48,8 +48,8 @@ async function startServer() {
     contents: string,
     config?: any
   ): Promise<string> => {
-    // Try gemini-3.8-flash first; failover to gemini-3.1-flash-lite on 503/429/high-demand
-    const modelsToTry = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'];
+    // Prioritize high-throughput gemini-3.1-flash-lite to avoid 503 high-demand spikes on gemini-3.8-flash
+    const modelsToTry = ['gemini-3.1-flash-lite', 'gemini-flash-latest', 'gemini-3.8-flash'];
     let lastError: any = null;
 
     for (const model of modelsToTry) {
@@ -59,7 +59,7 @@ async function startServer() {
           contents,
           config,
         });
-        if (response && typeof response.text === 'string') {
+        if (response && typeof response.text === 'string' && response.text.trim()) {
           return response.text;
         }
       } catch (err: any) {
@@ -72,22 +72,54 @@ async function startServer() {
     throw lastError || new Error('All AI models temporarily unavailable');
   };
 
+  // Helper to detect if audio transcript is inaudible, silent or hallucinated meta-prompt
+  const isHallucinatedOrEmptyTranscription = (text?: string | null): boolean => {
+    if (!text || typeof text !== 'string') return true;
+    const t = text.trim();
+    if (t.length < 2) return true;
+    const invalidPatterns = [
+      'نامفهوم',
+      'فایل صوتی',
+      'صدا شنیده نمی‌شود',
+      'صدایی شنیده نمی‌شود',
+      'صدایی وجود ندارد',
+      'سکوت',
+      'پیاده‌سازی کنم',
+      'ارسال کنید تا',
+      'مورد نظر خود را ارسال',
+      'امکان پیاده‌سازی',
+      'قابل تشخیص نیست',
+      'متن صدا',
+      'unable to transcribe',
+      'no speech',
+      'audio is silent'
+    ];
+    return invalidPatterns.some(pattern => t.toLowerCase().includes(pattern.toLowerCase()));
+  };
+
   // Resilient Gemini Audio Transcription helper for voice notes in Persian
   const transcribeAudioWithFallback = async (
     ai: GoogleGenAI,
     base64Audio: string,
     mimeType: string = 'audio/webm'
   ): Promise<string> => {
+    const cleanMime = (mimeType || 'audio/webm').split(';')[0].trim();
     const audioPart = {
       inlineData: {
-        mimeType: mimeType || 'audio/webm',
+        mimeType: cleanMime,
         data: base64Audio,
       },
     };
 
-    const promptText = 'لطفاً این پیام صوتی بیمار را با دقت بسیار بالا و بدون هیچ‌گونه تحریف به زبان فارسی روان پیاده‌سازی و تایپ کنید (Persian speech-to-text). فقط متن گفته‌شده را بنویسید و هیچ عبارت اضافی مثل "متن صدا این است" یا برچسب نگذارید.';
+    const promptText = `شما یک سیستم هوشمند تبدیل گفتار به نوشتار (Speech-to-Text) تخصصی زبان فارسی هستید.
+وظیفه شما این است که صدای ضبط‌شده بیمار را دقیقاً به زبان فارسی روان پیاده‌سازی و تایپ کنید.
+قوانین:
+۱. فقط و فقط متن جملاتی که بیمار به زبان فارسی بیان می‌کند را بنویسید.
+۲. از نوشتن هرگونه توضیح اضافی، برچسب، پیشوند یا علامت نقل‌قول خودداری فرمایید.
+۳. اگر در فایل صوتی هیچ صحبتی شنیده نمی‌شود یا فقط صدای خش‌خش/سکوت است، فقط عبارت «[صدا نامفهوم بود]» را بازگردانید.`;
 
-    const modelsToTry = ['gemini-3.5-transcribe', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
+    // Fast, responsive flash models for voice transcription
+    const modelsToTry = ['gemini-3.1-flash-lite', 'gemini-flash-latest', 'gemini-3.8-flash'];
     let lastError: any = null;
 
     for (const model of modelsToTry) {
@@ -102,7 +134,8 @@ async function startServer() {
           },
         });
         if (response && typeof response.text === 'string' && response.text.trim()) {
-          return response.text.trim();
+          const cleaned = response.text.trim().replace(/^["'«»]+|["'«»]+$/g, '');
+          return cleaned;
         }
       } catch (err: any) {
         lastError = err;
@@ -111,7 +144,7 @@ async function startServer() {
       }
     }
 
-    throw lastError || new Error('خطا در پیاده‌سازی صوتی');
+    throw lastError || new Error('All AI models temporarily unavailable for audio transcription');
   };
 
   // Server-side Gemini AI Endpoint for Patient Assistant / Care Navigator
@@ -192,16 +225,26 @@ ${context ? `بافت کاربر: ${JSON.stringify(context).slice(0, 500)}` : ''
         if (ai) {
           try {
             userTranscript = await transcribeAudioWithFallback(ai, audioBase64, mimeType || 'audio/webm');
-            safeMsg = userTranscript;
           } catch (transcribeErr) {
             console.warn('Voice transcription failed in care-navigator:', transcribeErr);
-            userTranscript = 'پیام صوتی دریافت شد';
-            safeMsg = 'بررسی وضعیت بیمار و راهنمایی پزشکی بر اساس پیام صوتی';
+            userTranscript = null;
           }
-        } else {
-          userTranscript = 'پیام صوتی دریافت شد';
-          safeMsg = 'درخواست راهنمایی در مورد علائم و انتخاب پزشک';
         }
+
+        // Handle inaudible, silent or hallucinated empty voice recording gracefully
+        if (isHallucinatedOrEmptyTranscription(userTranscript)) {
+          return res.json({
+            reply: 'پیام صوتی شما دریافت شد، اما صدا به اندازه کافی واضح نبود یا صحبتی شنیده نشد. لطفاً در محیطی با نویز کمتر مجدداً ویس بفرستید یا علائم خود را به صورت متنی بنویسید تا راهنمایی‌تان کنم.',
+            userTranscript: 'صدا واضح نبود',
+            intent: 'general_info',
+            specialtyId: null,
+            doctorId: null,
+            urgency: 'routine',
+            emergency: false
+          });
+        }
+
+        safeMsg = userTranscript;
       }
 
       if (!apiKey) {
@@ -248,8 +291,9 @@ ${context ? JSON.stringify(context).slice(0, 1500) : 'صفحه عمومی'}
 تاریخچه گفتگوهای قبلی:
 ${conversationTurns}
 
-پیام جدید کاربر:
-"${safeMsg}"`;
+پیام جدید بیمار:
+"${safeMsg}"
+${audioBase64 ? 'توجه: این پیام توسط بیمار به صورت پیام صوتی (ویس) ارسال و با دقت پیاده‌سازی شده است. به عنوان راهبر سلامت، با لحنی گرم، همدلانه و متناسب با علائم پزشکی بیان‌شده به بیمار پاسخ دهید. هرگز نگویید امکان پردازش یا شنیدن فایل صوتی را ندارید.' : ''}`;
 
       const rawText = await generateWithFallback(ai, promptContent);
 
