@@ -15,20 +15,45 @@ import { apiService } from './apiService';
 export const AI_DISCLAIMER = `توجه مهم: این دستیار هوشمند صرفاً جهت راهنمایی، مسیریابی خدمات کلینیک و پشتیبانی اولیه طراحی شده است و به‌هیچ‌عنوان جایگزین تشخیص یا تجویز مستقیم پزشک متخصص نمی‌باشد. در موارد اضطراری فوری با ۱۱۵ تماس بگیرید.`;
 
 export interface CareNavigatorRequest {
-  message: string;
-  history?: Array<{ sender: 'user' | 'ai'; text: string; intent?: string; specialtyId?: string | null }>;
+  message?: string;
+  audioBase64?: string;
+  mimeType?: string;
+  history?: Array<{ sender: 'user' | 'ai'; text: string; intent?: string; specialtyId?: string | null; audioUrl?: string }>;
   context?: Partial<GroundedPatientNavigationContext>;
   activeSpecialtyId?: string | null;
 }
 
 export interface CareNavigatorResponse {
   reply: string;
+  userTranscript?: string;
   intent: 'find_doctor' | 'find_specialty' | 'booking_help' | 'patient_appointments' | 'general_info' | 'emergency';
   specialtyId?: string | null;
   doctorId?: string | null;
   urgency?: 'routine' | 'urgent' | 'emergency';
   emergency: boolean;
   matchedDoctors?: Doctor[];
+}
+
+/**
+ * Transcribe voice audio to Persian text using server-side Gemini API
+ */
+export async function transcribeVoiceAudio(audioBase64: string, mimeType: string = 'audio/webm'): Promise<string> {
+  try {
+    const res = await fetch('/api/ai/transcribe-voice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ audioBase64, mimeType })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && typeof data.text === 'string') {
+        return data.text.trim();
+      }
+    }
+  } catch (e) {
+    console.warn('transcribeVoiceAudio failed:', e);
+  }
+  return '';
 }
 
 /**
@@ -116,7 +141,9 @@ export async function askCareNavigator(req: CareNavigatorRequest): Promise<CareN
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        message: req.message,
+        message: req.message || '',
+        audioBase64: req.audioBase64,
+        mimeType: req.mimeType,
         history: req.history,
         context: req.context || {
           rememberedSpecialtyId
@@ -141,6 +168,7 @@ export async function askCareNavigator(req: CareNavigatorRequest): Promise<CareN
 
         return {
           reply: data.reply.trim(),
+          userTranscript: data.userTranscript,
           intent: data.intent || (matchedDoctors.length > 0 ? 'find_doctor' : 'general_info'),
           specialtyId: resolvedSpecialtyId,
           doctorId: data.doctorId,
@@ -155,7 +183,7 @@ export async function askCareNavigator(req: CareNavigatorRequest): Promise<CareN
   }
 
   // Grounded local triage engine with dynamic doctor resolution & multi-turn memory
-  const query = req.message.toLowerCase().trim();
+  const query = (req.message || '').toLowerCase().trim();
   let detectedSpecialtyId: string | null = null;
   let emergency = false;
   let urgency: 'routine' | 'urgent' | 'emergency' = 'routine';

@@ -7,7 +7,8 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: '25mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
   // API Routes FIRST
   app.get('/api/health', (_req, res) => {
@@ -47,8 +48,8 @@ async function startServer() {
     contents: string,
     config?: any
   ): Promise<string> => {
-    // Try gemini-3.7-flash first; failover to gemini-3.1-flash-lite on 503/429/high-demand
-    const modelsToTry = ['gemini-3.7-flash', 'gemini-3.1-flash-lite'];
+    // Try gemini-3.8-flash first; failover to gemini-3.1-flash-lite on 503/429/high-demand
+    const modelsToTry = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'];
     let lastError: any = null;
 
     for (const model of modelsToTry) {
@@ -69,6 +70,48 @@ async function startServer() {
     }
 
     throw lastError || new Error('All AI models temporarily unavailable');
+  };
+
+  // Resilient Gemini Audio Transcription helper for voice notes in Persian
+  const transcribeAudioWithFallback = async (
+    ai: GoogleGenAI,
+    base64Audio: string,
+    mimeType: string = 'audio/webm'
+  ): Promise<string> => {
+    const audioPart = {
+      inlineData: {
+        mimeType: mimeType || 'audio/webm',
+        data: base64Audio,
+      },
+    };
+
+    const promptText = 'لطفاً این پیام صوتی بیمار را با دقت بسیار بالا و بدون هیچ‌گونه تحریف به زبان فارسی روان پیاده‌سازی و تایپ کنید (Persian speech-to-text). فقط متن گفته‌شده را بنویسید و هیچ عبارت اضافی مثل "متن صدا این است" یا برچسب نگذارید.';
+
+    const modelsToTry = ['gemini-3.5-transcribe', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
+    let lastError: any = null;
+
+    for (const model of modelsToTry) {
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents: {
+            parts: [
+              audioPart,
+              { text: promptText },
+            ],
+          },
+        });
+        if (response && typeof response.text === 'string' && response.text.trim()) {
+          return response.text.trim();
+        }
+      } catch (err: any) {
+        lastError = err;
+        const msg = err?.message || err?.error?.message || String(err);
+        console.warn(`[Audio Transcribe Failover] Model "${model}" failed (${msg}). Trying next candidate...`);
+      }
+    }
+
+    throw lastError || new Error('خطا در پیاده‌سازی صوتی');
   };
 
   // Server-side Gemini AI Endpoint for Patient Assistant / Care Navigator
@@ -129,10 +172,11 @@ ${context ? `بافت کاربر: ${JSON.stringify(context).slice(0, 500)}` : ''
     }
   });
 
-  // Stateful Care Navigator endpoint with structured intent & triage
+  // Stateful Care Navigator endpoint with structured intent & triage (Text and Voice input support)
   app.post('/api/ai/care-navigator', async (req, res) => {
-    const { message, history, context } = req.body;
-    const safeMsg = typeof message === 'string' ? message.trim().slice(0, 2000) : '';
+    const { message, audioBase64, mimeType, history, context } = req.body;
+    let safeMsg = typeof message === 'string' ? message.trim().slice(0, 2000) : '';
+    let userTranscript: string | null = null;
 
     try {
       const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
@@ -141,9 +185,29 @@ ${context ? `بافت کاربر: ${JSON.stringify(context).slice(0, 500)}` : ''
       }
 
       const apiKey = process.env.GEMINI_API_KEY;
+      const ai = apiKey ? getAiClient(apiKey) : null;
+
+      // If voice audio is provided, transcribe with Gemini AI
+      if (audioBase64 && typeof audioBase64 === 'string') {
+        if (ai) {
+          try {
+            userTranscript = await transcribeAudioWithFallback(ai, audioBase64, mimeType || 'audio/webm');
+            safeMsg = userTranscript;
+          } catch (transcribeErr) {
+            console.warn('Voice transcription failed in care-navigator:', transcribeErr);
+            userTranscript = 'پیام صوتی دریافت شد';
+            safeMsg = 'بررسی وضعیت بیمار و راهنمایی پزشکی بر اساس پیام صوتی';
+          }
+        } else {
+          userTranscript = 'پیام صوتی دریافت شد';
+          safeMsg = 'درخواست راهنمایی در مورد علائم و انتخاب پزشک';
+        }
+      }
+
       if (!apiKey) {
         return res.json({
-          reply: 'به راهبر هوشمند سلامت همراه کلینیک خوش آمدید. چگونه می‌توانم در انتخاب تخصص درمانی، پزشک یا نوبت‌دهی به شما کمک کنم؟',
+          reply: 'به راهبر هوشمند سلامت همراه کلینیک خوش آمدید. پیام صوتی/متنی شما دریافت شد. چگونه می‌توانم در انتخاب تخصص درمانی، پزشک یا نوبت‌دهی به شما کمک کنم؟',
+          userTranscript: userTranscript || undefined,
           intent: 'general_info',
           specialtyId: null,
           doctorId: null,
@@ -153,10 +217,9 @@ ${context ? `بافت کاربر: ${JSON.stringify(context).slice(0, 500)}` : ''
       }
 
       if (!safeMsg) {
-        return res.status(400).json({ error: 'پیام نامعتبر است.' });
+        return res.status(400).json({ error: 'پیام یا صوت ارسالی نامعتبر است.' });
       }
 
-      const ai = getAiClient(apiKey);
       const conversationTurns = Array.isArray(history)
         ? history.slice(-8).map((h: any) => `${h.sender === 'user' ? 'کاربر' : 'دستیار'}: ${h.text}`).join('\n')
         : '';
@@ -203,6 +266,7 @@ ${conversationTurns}
       if (parsed && typeof parsed.reply === 'string') {
         return res.json({
           reply: parsed.reply.trim(),
+          userTranscript: userTranscript || undefined,
           intent: parsed.intent || 'general_info',
           specialtyId: parsed.specialtyId || null,
           doctorId: parsed.doctorId || null,
@@ -214,6 +278,7 @@ ${conversationTurns}
       const isEmerg = safeMsg.includes('درد قفسه سینه') || safeMsg.includes('سکته') || safeMsg.includes('بیهوشی') || safeMsg.includes('۱۱۵');
       return res.json({
         reply: rawText.replace(/```json|```/g, '').trim() || 'برای راهنمایی دقیق‌تر، تخصص مورد نظر خود را بفرمایید.',
+        userTranscript: userTranscript || undefined,
         intent: isEmerg ? 'emergency' : 'general_info',
         specialtyId: null,
         doctorId: null,
@@ -224,12 +289,40 @@ ${conversationTurns}
       console.warn('Care Navigator fallback:', error instanceof Error ? error.message : error);
       return res.json({
         reply: 'به راهبر سلامت همراه کلینیک خوش آمدید. برای راهنمایی در انتخاب دپارتمان تخصصی و رزرو نوبت، لطفاً علائم یا سوال خود را مطرح فرمایید.',
+        userTranscript: userTranscript || undefined,
         intent: 'general_info',
         specialtyId: null,
         doctorId: null,
         urgency: 'routine',
         emergency: false
       });
+    }
+  });
+
+  // Dedicated Voice Transcription Endpoint (Gemini Multimodal Audio Understanding)
+  app.post('/api/ai/transcribe-voice', async (req, res) => {
+    const { audioBase64, mimeType } = req.body;
+    if (!audioBase64 || typeof audioBase64 !== 'string') {
+      return res.status(400).json({ error: 'داده صوتی ارسال نشده است.' });
+    }
+
+    try {
+      const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+      if (isRateLimited(clientIp)) {
+        return res.status(429).json({ error: 'تعداد درخواست‌ها بیش از حد مجاز است.' });
+      }
+
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        return res.json({ text: 'پیام صوتی شما با موفقیت دریافت شد.' });
+      }
+
+      const ai = getAiClient(apiKey);
+      const text = await transcribeAudioWithFallback(ai, audioBase64, mimeType || 'audio/webm');
+      return res.json({ text });
+    } catch (err: any) {
+      console.warn('Voice transcribe error:', err);
+      return res.status(500).json({ error: 'خطا در تبدیل صوت به متن با هوش مصنوعی', message: err?.message });
     }
   });
 
@@ -370,10 +463,11 @@ ${safeHistory || 'هیچ شرح حال قبلی ثبت نشده است.'}`;
     }
   });
 
-  // Dedicated Doctor Site AI Assistant Endpoint (Grounded in specific Doctor Practice)
+  // Dedicated Doctor Site AI Assistant Endpoint (Grounded in specific Doctor Practice with Text & Voice support)
   app.post('/api/ai/doctor-site-assistant', async (req, res) => {
-    const { prompt, doctorContext, history } = req.body;
-    const safePrompt = typeof prompt === 'string' ? prompt.trim().slice(0, 2000) : '';
+    const { prompt, audioBase64, mimeType, doctorContext, history } = req.body;
+    let safePrompt = typeof prompt === 'string' ? prompt.trim().slice(0, 2000) : '';
+    let userTranscript: string | null = null;
 
     try {
       const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
@@ -382,19 +476,37 @@ ${safeHistory || 'هیچ شرح حال قبلی ثبت نشده است.'}`;
       }
 
       const apiKey = process.env.GEMINI_API_KEY;
+      const ai = apiKey ? getAiClient(apiKey) : null;
+
+      if (audioBase64 && typeof audioBase64 === 'string') {
+        if (ai) {
+          try {
+            userTranscript = await transcribeAudioWithFallback(ai, audioBase64, mimeType || 'audio/webm');
+            safePrompt = userTranscript;
+          } catch (transcribeErr) {
+            console.warn('Voice transcription failed in doctor assistant:', transcribeErr);
+            userTranscript = 'پیام صوتی دریافت شد';
+            safePrompt = 'پیام صوتی مراجع جهت راهنمایی نوبت‌دهی و خدمات مطب';
+          }
+        } else {
+          userTranscript = 'پیام صوتی دریافت شد';
+          safePrompt = 'پیام صوتی مراجع مطب';
+        }
+      }
+
       if (!apiKey) {
         return res.json({
-          text: `به وبسایت اختصاصی ${doctorContext?.name || 'پزشک'} خوش آمدید. می‌توانید جهت دریافت نوبت حضوری یا مشاوره آنلاین از دکمه نوبت‌دهی استفاده فرمایید.`,
+          text: `به وبسایت اختصاصی ${doctorContext?.name || 'پزشک'} خوش آمدید. پیام صوتی/متنی شما دریافت شد. می‌توانید جهت دریافت نوبت حضوری یا مشاوره آنلاین از دکمه نوبت‌دهی استفاده فرمایید.`,
+          userTranscript: userTranscript || undefined,
           isEmergency: false,
           suggestedAction: { label: 'رزرو نوبت با پزشک', actionType: 'book' }
         });
       }
 
       if (!safePrompt) {
-        return res.status(400).json({ error: 'متن درخواست نامعتبر است.' });
+        return res.status(400).json({ error: 'متن یا صوت ارسالی نامعتبر است.' });
       }
 
-      const ai = getAiClient(apiKey);
       const conversationTurns = Array.isArray(history)
         ? history.slice(-6).map((h: any) => `${h.role === 'user' ? 'مراجع' : 'دستیار مطب'}: ${h.text}`).join('\n')
         : '';
@@ -440,7 +552,10 @@ ${conversationTurns}
         };
       }
 
-      return res.json(parsed);
+      return res.json({
+        ...parsed,
+        userTranscript: userTranscript || parsed?.userTranscript || undefined
+      });
     } catch (error) {
       console.warn('Doctor AI service fallback triggered:', error instanceof Error ? error.message : error);
 

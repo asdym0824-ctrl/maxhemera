@@ -684,6 +684,7 @@ export interface PatientAiIntentResponse {
   doctorId?: string | null;
   urgency?: 'routine' | 'urgent' | 'emergency';
   emergency?: boolean;
+  userTranscript?: string;
 }
 
 export interface PatientPageContext {

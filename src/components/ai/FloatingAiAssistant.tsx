@@ -1,13 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Bot, X, Send, Sparkles, ShieldAlert, ArrowLeft, RotateCcw, AlertTriangle, Calendar, UserCheck, Stethoscope } from 'lucide-react';
+import { Bot, X, Send, Sparkles, ShieldAlert, ArrowLeft, RotateCcw, AlertTriangle, Calendar, UserCheck, Stethoscope, Mic, Volume2 } from 'lucide-react';
 import { askCareNavigator, AI_DISCLAIMER } from '../../services/aiService';
 import { aiContextService } from '../../services/aiContextService';
 import { useAuth } from '../../context/AuthContext';
 import { Doctor } from '../../types';
+import { VoiceRecorder } from './VoiceRecorder';
+import { VoiceMessagePlayer } from './VoiceMessagePlayer';
 
 interface Message {
+  id?: string;
   sender: 'ai' | 'user';
   text: string;
+  audioUrl?: string;
+  audioDuration?: number;
+  userTranscript?: string;
+  isVoiceMessage?: boolean;
   emergency?: boolean;
   specialtyId?: string | null;
   matchedDoctors?: Doctor[];
@@ -22,24 +29,28 @@ export const FloatingAiAssistant: React.FC<{ onNavigateToDoctors?: () => void; o
   const [activeSpecialtyId, setActiveSpecialtyId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([
     {
+      id: 'msg-welcome',
       sender: 'ai',
-      text: 'سلام! من دستیار هوشمند همرا کلینیک (HEMERA CLINIC AI) هستم. چطور می‌توانم در انتخاب دپارتمان تخصصی، انتخاب پزشک، یا راهنمایی مراحل نوبت‌دهی کمکتان کنم؟'
+      text: 'سلام! من راهبر و دستیار هوشمند همرا کلینیک (HEMERA CLINIC AI) هستم. می‌توانید سوال، علائم یا نیاز پزشکی خود را تایپ کنید یا پیام صوتی (ویس) ارسال فرمایید تا دقیقاً بررسی و راهنمایی کنم.'
     }
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isOpen]);
+  }, [messages, isOpen, isRecordingVoice]);
 
   const handleReset = () => {
     setActiveSpecialtyId(null);
+    setIsRecordingVoice(false);
     setMessages([
       {
+        id: `msg-reset-${Date.now()}`,
         sender: 'ai',
-        text: 'گفتگو بازنشانی شد. چطور می‌توانم در انتخاب پزشک، تخصص درمانی یا فرایند نوبت‌دهی شما را راهنمایی کنم؟'
+        text: 'گفتگو بازنشانی شد. چطور می‌توانم به صورت صوتی یا متنی در انتخاب پزشک، تخصص درمانی یا فرایند نوبت‌دهی شما را راهنمایی کنم؟'
       }
     ]);
   };
@@ -49,7 +60,8 @@ export const FloatingAiAssistant: React.FC<{ onNavigateToDoctors?: () => void; o
     if (!textToSend || isLoading) return;
 
     setInput('');
-    const newHistory: Message[] = [...messages, { sender: 'user', text: textToSend }];
+    const userMsgId = `user-${Date.now()}`;
+    const newHistory: Message[] = [...messages, { id: userMsgId, sender: 'user', text: textToSend }];
     setMessages(newHistory);
     setIsLoading(true);
 
@@ -61,8 +73,9 @@ export const FloatingAiAssistant: React.FC<{ onNavigateToDoctors?: () => void; o
         message: textToSend,
         history: newHistory.map(m => ({ 
           sender: m.sender, 
-          text: m.text,
-          specialtyId: m.specialtyId
+          text: m.userTranscript || m.text,
+          specialtyId: m.specialtyId,
+          audioUrl: m.audioUrl
         })),
         context: navContext,
         activeSpecialtyId
@@ -75,6 +88,7 @@ export const FloatingAiAssistant: React.FC<{ onNavigateToDoctors?: () => void; o
       setMessages(prev => [
         ...prev,
         {
+          id: `ai-${Date.now()}`,
           sender: 'ai',
           text: response.reply,
           emergency: response.emergency,
@@ -86,8 +100,88 @@ export const FloatingAiAssistant: React.FC<{ onNavigateToDoctors?: () => void; o
       setMessages(prev => [
         ...prev,
         {
+          id: `ai-err-${Date.now()}`,
           sender: 'ai',
           text: 'متأسفانه در برقراری ارتباط با سرویس هوشمند مشکلی رخ داد. لطفاً از بخش پزشکان تخصص مورد نظر را جستجو فرمایید.'
+        }
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSendVoice = async (blob: Blob, base64: string, durationSec: number, mimeType: string) => {
+    setIsRecordingVoice(false);
+    const localAudioUrl = URL.createObjectURL(blob);
+    const voiceMsgId = `voice-${Date.now()}`;
+
+    const newHistory: Message[] = [
+      ...messages,
+      {
+        id: voiceMsgId,
+        sender: 'user',
+        text: '🎙️ در حال پردازش پیام صوتی...',
+        audioUrl: localAudioUrl,
+        audioDuration: durationSec,
+        isVoiceMessage: true
+      }
+    ];
+    setMessages(newHistory);
+    setIsLoading(true);
+
+    try {
+      const navContext = await aiContextService.buildPatientNavigationContext(currentUser);
+
+      const response = await askCareNavigator({
+        audioBase64: base64,
+        mimeType,
+        history: newHistory.map(m => ({
+          sender: m.sender,
+          text: m.userTranscript || m.text,
+          specialtyId: m.specialtyId,
+          audioUrl: m.audioUrl
+        })),
+        context: navContext,
+        activeSpecialtyId
+      });
+
+      if (response.specialtyId) {
+        setActiveSpecialtyId(response.specialtyId);
+      }
+
+      // Update user message with Persian transcript from Gemini
+      setMessages(prev => {
+        const updated = prev.map(m => {
+          if (m.id === voiceMsgId) {
+            return {
+              ...m,
+              text: response.userTranscript ? `🎙️ «${response.userTranscript}»` : '🎙️ پیام صوتی کاربر',
+              userTranscript: response.userTranscript
+            };
+          }
+          return m;
+        });
+
+        return [
+          ...updated,
+          {
+            id: `ai-${Date.now()}`,
+            sender: 'ai',
+            text: response.reply,
+            emergency: response.emergency,
+            specialtyId: response.specialtyId,
+            matchedDoctors: response.matchedDoctors
+          }
+        ];
+      });
+    } catch (err) {
+      console.warn('Voice navigator processing fallback:', err);
+      setMessages(prev => [
+        ...prev,
+        {
+          id: `ai-voice-err-${Date.now()}`,
+          sender: 'ai',
+          text: 'پیام صوتی شما دریافت گردید. در صورت عدم امکان پیاده‌سازی خودکار صوت، لطفاً علائم یا سوال خود را به صورت کوتاه متنی ارسال فرمایید تا راهنمایی دقیق تقدیم شود.'
         }
       ]);
     } finally {
@@ -164,18 +258,42 @@ export const FloatingAiAssistant: React.FC<{ onNavigateToDoctors?: () => void; o
           <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-slate-50/50 text-xs">
             {messages.map((msg, idx) => (
               <div
-                key={idx}
+                key={msg.id || idx}
                 className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'} space-y-2`}
               >
-                <div
-                  className={`max-w-[88%] p-3.5 rounded-2xl leading-relaxed ${
-                    msg.sender === 'user'
-                      ? 'bg-blue-600 text-white rounded-br-none shadow-xs'
-                      : 'bg-white border border-slate-200 text-slate-800 rounded-bl-none shadow-2xs'
-                  }`}
-                >
-                  {msg.text}
-                </div>
+                {msg.isVoiceMessage ? (
+                  <div className="max-w-[88%] p-3 rounded-2xl leading-relaxed bg-blue-600 text-white rounded-br-none shadow-xs flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between gap-2 text-[11px] font-medium text-blue-100 border-b border-blue-500/30 pb-1">
+                      <div className="flex items-center gap-1.5">
+                        <Mic className="w-3.5 h-3.5 text-blue-200 animate-pulse" />
+                        <span>پیام صوتی شما</span>
+                      </div>
+                      <span className="text-[10px] opacity-75">تحلیل هوشمند با جمینای</span>
+                    </div>
+                    <VoiceMessagePlayer
+                      audioUrl={msg.audioUrl}
+                      duration={msg.audioDuration}
+                      transcript={msg.userTranscript}
+                      isAiProcessing={isLoading && idx === messages.length - 1}
+                      isUser={true}
+                    />
+                  </div>
+                ) : (
+                  <div
+                    className={`max-w-[88%] p-3.5 rounded-2xl leading-relaxed ${
+                      msg.sender === 'user'
+                        ? 'bg-blue-600 text-white rounded-br-none shadow-xs'
+                        : 'bg-white border border-slate-200 text-slate-800 rounded-bl-none shadow-2xs'
+                    }`}
+                  >
+                    {msg.text}
+                    {msg.sender === 'ai' && (
+                      <div className="mt-2 pt-2 border-t border-slate-100">
+                        <VoiceMessagePlayer readAloudText={msg.text} isUser={false} />
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Emergency Alert Card */}
                 {msg.emergency && (
@@ -228,9 +346,9 @@ export const FloatingAiAssistant: React.FC<{ onNavigateToDoctors?: () => void; o
             ))}
             {isLoading && (
               <div className="flex justify-start">
-                <div className="bg-white border border-slate-200 text-slate-500 p-3 rounded-2xl text-xs flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-blue-600 animate-ping" />
-                  <span>در حال تحلیل و بررسی اطلاعات کلینیک...</span>
+                <div className="bg-white border border-slate-200 text-slate-600 p-3 rounded-2xl text-xs flex items-center gap-2 shadow-2xs">
+                  <div className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-ping" />
+                  <span>هوش مصنوعی در حال پردازش، شنیدن صوت و بررسی پزشکان...</span>
                 </div>
               </div>
             )}
@@ -265,23 +383,47 @@ export const FloatingAiAssistant: React.FC<{ onNavigateToDoctors?: () => void; o
             </button>
           </div>
 
-          {/* Input Footer */}
-          <div className="p-3 bg-white border-t border-slate-200 flex items-center gap-2">
-            <input
-              type="text"
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSend()}
-              placeholder="علائم، تخصص یا سوال خود را بنویسید..."
-              className="flex-1 text-xs px-3 py-2.5 bg-slate-100 rounded-xl outline-hidden focus:ring-2 focus:ring-blue-600/30 text-slate-800"
-            />
-            <button
-              onClick={() => handleSend()}
-              disabled={isLoading || !input.trim()}
-              className="p-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl transition-colors cursor-pointer"
-            >
-              <Send className="w-4 h-4 rotate-180" />
-            </button>
+          {/* Input Footer with Voice & Text input */}
+          <div className="p-2.5 bg-white border-t border-slate-200">
+            {isRecordingVoice ? (
+              <VoiceRecorder
+                onSendVoice={handleSendVoice}
+                onCancel={() => setIsRecordingVoice(false)}
+                disabled={isLoading}
+              />
+            ) : (
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  id="care-navigator-text-input"
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSend()}
+                  placeholder="علائم خود را بنویسید یا دکمه ویس را بزنید..."
+                  className="flex-1 text-xs px-3 py-2.5 bg-slate-100 rounded-xl outline-hidden focus:ring-2 focus:ring-blue-600/30 text-slate-800"
+                />
+                <button
+                  type="button"
+                  id="btn-voice-record-start"
+                  onClick={() => setIsRecordingVoice(true)}
+                  disabled={isLoading}
+                  title="ارسال پیام صوتی (ویس)"
+                  className="p-2.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 active:scale-95 disabled:opacity-50 rounded-xl transition-all cursor-pointer border border-blue-100 flex items-center justify-center shrink-0"
+                >
+                  <Mic className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  id="btn-care-navigator-send"
+                  onClick={() => handleSend()}
+                  disabled={isLoading || !input.trim()}
+                  title="ارسال پیام متنی"
+                  className="p-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl transition-colors cursor-pointer shrink-0"
+                >
+                  <Send className="w-4 h-4 rotate-180" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

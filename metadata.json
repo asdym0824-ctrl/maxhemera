@@ -2,7 +2,8 @@
   "name": "Remix Remix hemera2",
   "description": "سامانه جامع سلامت و مدیریت همرا کلینیک (HEMERA CLINIC) زیر نظر هلدینگ HEMERA با پرتال‌های اختصاصی پزشکان، بیماران، منشی و مدیریت کلینیک و سامانه ورود و احراز هویت هوشمند.",
   "requestFramePermissions": [
-    "geolocation"
+    "geolocation",
+    "microphone"
   ],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

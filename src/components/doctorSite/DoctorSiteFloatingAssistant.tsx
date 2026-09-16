@@ -12,10 +12,13 @@ import {
   Stethoscope, 
   FileText,
   ChevronDown,
-  ArrowLeft
+  ArrowLeft,
+  Mic
 } from 'lucide-react';
 import { Doctor } from '../../types';
 import { ThemeStyles } from './themeConfig';
+import { VoiceRecorder } from '../ai/VoiceRecorder';
+import { VoiceMessagePlayer } from '../ai/VoiceMessagePlayer';
 
 interface Props {
   doctor: Doctor;
@@ -29,6 +32,10 @@ interface Message {
   sender: 'ai' | 'user';
   text: string;
   timestamp: string;
+  audioUrl?: string;
+  audioDuration?: number;
+  userTranscript?: string;
+  isVoiceMessage?: boolean;
   isEmergency?: boolean;
   suggestedAction?: {
     label: string;
@@ -46,11 +53,12 @@ export const DoctorSiteFloatingAssistant: React.FC<Props> = ({
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'welcome',
       sender: 'ai',
-      text: `سلام! من دستیار هوشمند مطب ${doctor.name} (${doctor.specialtyName}) هستم. چطور می‌توانم در مورد نوبت‌دهی، خدمات، بیمه‌ها و ساعات کاری مطب به شما کمک کنم؟`,
+      text: `سلام! من دستیار هوشمند مطب ${doctor.name} (${doctor.specialtyName}) هستم. می‌توانید سوالات خود را بنویسید یا ویس بفرستید تا در مورد نوبت‌دهی، خدمات، بیمه‌ها و ساعات کاری راهنمایی‌تان کنم.`,
       timestamp: new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })
     }
   ]);
@@ -61,7 +69,7 @@ export const DoctorSiteFloatingAssistant: React.FC<Props> = ({
     if (isOpen) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, isOpen]);
+  }, [messages, isOpen, isRecordingVoice]);
 
   const quickPrompts = [
     { label: '📅 رزرو نوبت با دکتر', prompt: 'می‌خواهم با این پزشک نوبت ویزیت رزرو کنم.' },
@@ -112,7 +120,7 @@ export const DoctorSiteFloatingAssistant: React.FC<Props> = ({
         body: JSON.stringify({
           prompt: query,
           doctorContext,
-          history: messages.slice(-6).map(m => ({ role: m.sender === 'user' ? 'user' : 'assistant', text: m.text }))
+          history: messages.slice(-6).map(m => ({ role: m.sender === 'user' ? 'user' : 'assistant', text: m.userTranscript || m.text }))
         })
       });
 
@@ -143,25 +151,19 @@ export const DoctorSiteFloatingAssistant: React.FC<Props> = ({
       console.warn('Doctor AI Assistant local fallback:', err);
       // Fallback matching query
       const q = query.toLowerCase();
-      let fallbackText = `مطب ${doctor.name} آماده ارائه خدمات تخصصی ${doctor.specialtyName} به شما عزیزان است. برای رزرو نوبت حضوری یا آنلاین می‌توانید از دکمه دریافت نوبت استفاده نمایید.`;
+      let text = `مطب ${doctor.name} آماده خدمت‌رسانی است. نزدیک‌ترین زمان در دسترس «${doctor.nextAvailableSlot}» می‌باشد. برای رزرو نوبت می‌توانید از دکمه زیر استفاده فرمایید.`;
       let isEmergency = false;
-      let action: Message['suggestedAction'] = undefined;
+      let action: Message['suggestedAction'] = { label: 'دریافت نوبت اینترنتی', actionType: 'book' };
 
-      if (q.includes('نوبت') || q.includes('رزرو') || q.includes('ساعت') || q.includes('خالی') || q.includes('زمان')) {
-        fallbackText = `نزدیک‌ترین نوبت در دسترس برای ${doctor.name} «${doctor.nextAvailableSlot}» می‌باشد. هم‌اکنون می‌توانید نوبت خود را به صورت آنلاین ثبت فرمایید.`;
-        action = { label: 'رزرو اینترنتی نوبت', actionType: 'book' };
-      } else if (q.includes('آدرس') || q.includes('مطب') || q.includes('کجا') || q.includes('تلفن') || q.includes('مکان')) {
-        const primaryOffice = doctor.offices?.[0];
-        fallbackText = `آدرس مطب: ${primaryOffice ? primaryOffice.address : doctor.address} | شماره تماس: ${primaryOffice?.phone || doctor.websiteConfig?.phone || 'پذیرش کلینیک'}`;
-        action = { label: 'مشاهده جزئیات مطب‌ها', actionType: 'offices' };
-      } else if (q.includes('بیمه') || q.includes('تامین اجتماعی') || q.includes('تکمیلی') || q.includes('قرارداد')) {
-        fallbackText = `بیمه‌های طرف قرارداد این مطب شامل: ${doctor.supportedInsurances.join('، ')} می‌باشد.`;
-      } else if (q.includes('خدمت') || q.includes('قیمت') || q.includes('هزینه') || q.includes('تعرفه')) {
-        fallbackText = `تعرفه ویزیت حضوری ${doctor.consultationFee.toLocaleString('fa-IR')} تومان می‌باشد. خدمات تخصصی شامل: ${doctor.services.slice(0, 4).join('، ')}.`;
-        action = { label: 'مشاهده لیست کامل خدمات', actionType: 'services' };
-      } else if (q.includes('درد سینه') || q.includes('سکته') || q.includes('تنگی نفس شدید') || q.includes('خونریزی') || q.includes('بیهوشی')) {
-        fallbackText = '⚠️ هشدار مهم: این علائم نیازمند اقدام فوری پزشکی هستند. لطفاً بدون فوت وقت با اورژانس ۱۱۵ تماس بگیرید یا به نزدیک‌ترین بخش اورژانس بیمارستان مراجعه فرمایید.';
+      if (q.includes('درد سینه') || q.includes('سکته') || q.includes('تنگی نفس') || q.includes('بیهوشی')) {
+        text = '⚠️ توجه اورژانسی: در صورت مشاهده این علائم لطفاً فوراً با اورژانس ۱۱۵ تماس حاصل نموده یا به نزدیک‌ترین مرکز درمانی مراجعه نمایید.';
         isEmergency = true;
+        action = undefined;
+      } else if (q.includes('آدرس') || q.includes('مطب') || q.includes('کجا') || q.includes('تلفن')) {
+        text = `نشانی مطب: ${doctor.address || doctor.city} - شماره تماس در بخش اطلاعات مطب‌ها درج گردیده است.`;
+        action = { label: 'مشاهده آدرس مطب‌ها', actionType: 'offices' };
+      } else if (q.includes('بیمه') || q.includes('قرارداد')) {
+        text = `بیمه‌های طرف قرارداد شامل: ${doctor.supportedInsurances?.join('، ') || 'بیمه‌های پایه و تکمیلی'} می‌باشد.`;
       }
 
       setMessages(prev => [
@@ -169,10 +171,114 @@ export const DoctorSiteFloatingAssistant: React.FC<Props> = ({
         {
           id: `ai-${Date.now()}`,
           sender: 'ai',
-          text: fallbackText,
+          text,
           timestamp: new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
           isEmergency,
           suggestedAction: action
+        }
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSendVoice = async (blob: Blob, base64: string, durationSec: number, mimeType: string) => {
+    setIsRecordingVoice(false);
+    const localAudioUrl = URL.createObjectURL(blob);
+    const voiceMsgId = `voice-${Date.now()}`;
+
+    const userVoiceMsg: Message = {
+      id: voiceMsgId,
+      sender: 'user',
+      text: '🎙️ در حال پردازش پیام صوتی...',
+      timestamp: new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
+      audioUrl: localAudioUrl,
+      audioDuration: durationSec,
+      isVoiceMessage: true
+    };
+
+    setMessages(prev => [...prev, userVoiceMsg]);
+    setIsLoading(true);
+
+    try {
+      const doctorContext = {
+        name: doctor.name,
+        title: doctor.title,
+        specialty: doctor.specialtyName,
+        councilNumber: doctor.medicalCouncilNumber,
+        city: doctor.city,
+        address: doctor.address,
+        nextSlot: doctor.nextAvailableSlot,
+        fee: doctor.consultationFee,
+        onlineFee: doctor.onlineConsultationFee,
+        hasOnline: doctor.hasOnlineConsultation,
+        insurances: doctor.supportedInsurances,
+        services: doctor.services,
+        detailedServices: doctor.detailedServices?.map(s => ({ title: s.title, price: s.price, duration: s.durationMinutes })),
+        offices: doctor.offices?.map(o => ({ title: o.title, address: o.address, phone: o.phone, hours: o.workingHours })),
+        faqs: doctor.websiteConfig?.faqs?.map(f => ({ q: f.question, a: f.answer }))
+      };
+
+      const res = await fetch('/api/ai/doctor-site-assistant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          audioBase64: base64,
+          mimeType,
+          doctorContext,
+          history: messages.slice(-6).map(m => ({ role: m.sender === 'user' ? 'user' : 'assistant', text: m.userTranscript || m.text }))
+        })
+      });
+
+      let aiText = '';
+      let isEmergency = false;
+      let action: Message['suggestedAction'] = undefined;
+      let userTranscript: string | undefined = undefined;
+
+      if (res.ok) {
+        const data = await res.json();
+        aiText = data.text;
+        isEmergency = data.isEmergency || false;
+        action = data.suggestedAction;
+        userTranscript = data.userTranscript;
+      } else {
+        throw new Error('API response not ok');
+      }
+
+      setMessages(prev => {
+        const updated = prev.map(m => {
+          if (m.id === voiceMsgId) {
+            return {
+              ...m,
+              text: userTranscript ? `🎙️ «${userTranscript}»` : '🎙️ پیام صوتی مراجع',
+              userTranscript
+            };
+          }
+          return m;
+        });
+
+        return [
+          ...updated,
+          {
+            id: `ai-${Date.now()}`,
+            sender: 'ai',
+            text: aiText,
+            timestamp: new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
+            isEmergency,
+            suggestedAction: action
+          }
+        ];
+      });
+    } catch (err) {
+      console.warn('Voice doctor assistant fallback:', err);
+      setMessages(prev => [
+        ...prev,
+        {
+          id: `ai-err-${Date.now()}`,
+          sender: 'ai',
+          text: `پیام صوتی شما ثبت شد. مطب ${doctor.name} آماده نوبت‌دهی است. جهت رزرو سریع از دکمه نوبت‌دهی استفاده فرمایید.`,
+          timestamp: new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
+          suggestedAction: { label: 'دریافت نوبت اینترنتی', actionType: 'book' }
         }
       ]);
     } finally {
@@ -259,48 +365,73 @@ export const DoctorSiteFloatingAssistant: React.FC<Props> = ({
                 key={msg.id}
                 className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
               >
-                <div
-                  className={`max-w-[85%] p-3 rounded-2xl leading-relaxed whitespace-pre-line ${
-                    msg.sender === 'user'
-                      ? 'bg-blue-700 text-white rounded-br-2xs'
-                      : msg.isEmergency
-                      ? 'bg-rose-50 border border-rose-200 text-rose-900 rounded-bl-2xs'
-                      : 'bg-white border border-slate-200 text-slate-800 rounded-bl-2xs shadow-2xs'
-                  }`}
-                >
-                  {msg.isEmergency && (
-                    <div className="flex items-center gap-1.5 text-rose-700 font-bold mb-1.5 pb-1 border-b border-rose-200">
-                      <AlertTriangle className="w-4 h-4" />
-                      <span>هشدار اورژانسی ۱۱۵</span>
+                {msg.isVoiceMessage ? (
+                  <div className="max-w-[85%] p-3 rounded-2xl bg-blue-700 text-white rounded-br-2xs shadow-2xs flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between gap-2 text-[10px] text-blue-200 border-b border-blue-600/40 pb-1">
+                      <div className="flex items-center gap-1">
+                        <Mic className="w-3.5 h-3.5 text-blue-300 animate-pulse" />
+                        <span>پیام صوتی ارسالی</span>
+                      </div>
+                      <span>درک هوشمند جمینای</span>
                     </div>
-                  )}
-                  <p>{msg.text}</p>
+                    <VoiceMessagePlayer
+                      audioUrl={msg.audioUrl}
+                      duration={msg.audioDuration}
+                      transcript={msg.userTranscript}
+                      isAiProcessing={isLoading && messages[messages.length - 1]?.id === msg.id}
+                      isUser={true}
+                    />
+                  </div>
+                ) : (
+                  <div
+                    className={`max-w-[85%] p-3 rounded-2xl leading-relaxed whitespace-pre-line ${
+                      msg.sender === 'user'
+                        ? 'bg-blue-700 text-white rounded-br-2xs shadow-xs'
+                        : msg.isEmergency
+                        ? 'bg-rose-50 border border-rose-200 text-rose-900 rounded-bl-2xs'
+                        : 'bg-white border border-slate-200 text-slate-800 rounded-bl-2xs shadow-2xs'
+                    }`}
+                  >
+                    {msg.isEmergency && (
+                      <div className="flex items-center gap-1.5 text-rose-700 font-bold mb-1.5 pb-1 border-b border-rose-200">
+                        <AlertTriangle className="w-4 h-4" />
+                        <span>هشدار اورژانسی ۱۱۵</span>
+                      </div>
+                    )}
+                    <p>{msg.text}</p>
 
-                  {/* Suggested Action Card */}
-                  {msg.suggestedAction && (
-                    <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-end">
-                      <button
-                        onClick={() => handleActionClick(msg.suggestedAction!)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] transition-colors shadow-2xs"
-                      >
-                        <Calendar className="w-3.5 h-3.5" />
-                        <span>{msg.suggestedAction.label}</span>
-                        <ArrowLeft className="w-3 h-3" />
-                      </button>
-                    </div>
-                  )}
-                </div>
+                    {msg.sender === 'ai' && (
+                      <div className="mt-2 pt-2 border-t border-slate-100">
+                        <VoiceMessagePlayer readAloudText={msg.text} isUser={false} />
+                      </div>
+                    )}
+
+                    {/* Suggested Action Card */}
+                    {msg.suggestedAction && (
+                      <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-end">
+                        <button
+                          onClick={() => handleActionClick(msg.suggestedAction!)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] transition-colors shadow-2xs cursor-pointer"
+                        >
+                          <Calendar className="w-3.5 h-3.5" />
+                          <span>{msg.suggestedAction.label}</span>
+                          <ArrowLeft className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <span className="text-[10px] text-slate-400 mt-1 px-1">{msg.timestamp}</span>
               </div>
             ))}
 
             {isLoading && (
-              <div className="flex items-center gap-2 p-3 bg-white rounded-2xl border border-slate-200 w-fit text-slate-500">
+              <div className="flex items-center gap-2 p-3 bg-white rounded-2xl border border-slate-200 w-fit text-slate-500 shadow-2xs">
                 <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" />
                 <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce [animation-delay:0.2s]" />
                 <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce [animation-delay:0.4s]" />
-                <span className="text-[11px]">در حال بررسی اطلاعات مطب...</span>
+                <span className="text-[11px]">در حال بررسی صوت و اطلاعات مطب با هوش مصنوعی...</span>
               </div>
             )}
             <div ref={messagesEndRef} />
@@ -312,7 +443,7 @@ export const DoctorSiteFloatingAssistant: React.FC<Props> = ({
               <button
                 key={idx}
                 onClick={() => handleSendMessage(chip.prompt)}
-                className="px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-blue-50 hover:text-blue-800 text-slate-600 text-[11px] font-medium whitespace-nowrap transition-colors border border-slate-200/70"
+                className="px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-blue-50 hover:text-blue-800 text-slate-600 text-[11px] font-medium whitespace-nowrap transition-colors border border-slate-200/70 cursor-pointer"
               >
                 {chip.label}
               </button>
@@ -320,29 +451,48 @@ export const DoctorSiteFloatingAssistant: React.FC<Props> = ({
           </div>
 
           {/* Input Bar */}
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSendMessage();
-            }}
-            className="p-3 bg-white border-t border-slate-200 flex items-center gap-2"
-          >
-            <input
-              type="text"
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              placeholder="سؤالتان درباره مطب و نوبت‌دهی را بنویسید..."
-              className="flex-1 px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-hidden focus:border-blue-600 focus:bg-white transition-colors"
-            />
-            <button
-              type="submit"
-              disabled={!input.trim() || isLoading}
-              className="p-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              aria-label="ارسال پیام"
-            >
-              <Send className="w-4 h-4" />
-            </button>
-          </form>
+          <div className="p-2.5 bg-white border-t border-slate-200">
+            {isRecordingVoice ? (
+              <VoiceRecorder
+                onSendVoice={handleSendVoice}
+                onCancel={() => setIsRecordingVoice(false)}
+                disabled={isLoading}
+              />
+            ) : (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSendMessage();
+                }}
+                className="flex items-center gap-2"
+              >
+                <input
+                  type="text"
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  placeholder="سؤالتان را بنویسید یا ویس ارسال فرمایید..."
+                  className="flex-1 px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-hidden focus:border-blue-600 focus:bg-white transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsRecordingVoice(true)}
+                  disabled={isLoading}
+                  title="ارسال پیام صوتی (ویس)"
+                  className="p-2.5 rounded-xl border border-blue-200 text-blue-600 hover:bg-blue-50 active:scale-95 disabled:opacity-50 transition-colors cursor-pointer shrink-0"
+                >
+                  <Mic className="w-4 h-4" />
+                </button>
+                <button
+                  type="submit"
+                  disabled={!input.trim() || isLoading}
+                  className="p-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer shrink-0"
+                  aria-label="ارسال پیام"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </form>
+            )}
+          </div>
         </div>
       )}
     </div>
