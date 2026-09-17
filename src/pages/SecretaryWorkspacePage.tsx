@@ -320,10 +320,10 @@ export const SecretaryWorkspacePage: React.FC = () => {
       />
 
       {/* Navigation Tabs */}
-      <div className="flex border-b border-slate-200 gap-2 text-xs font-bold">
+      <div className="flex border-b border-slate-200 gap-1 sm:gap-2 text-xs font-bold overflow-x-auto no-scrollbar flex-nowrap scroll-smooth -mx-4 px-4 sm:mx-0 sm:px-0">
         <button
           onClick={() => handleTabChange('queue')}
-          className={`pb-3 px-4 border-b-2 flex items-center gap-2 transition-all cursor-pointer ${
+          className={`pb-3 px-3 sm:px-4 border-b-2 flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
             activeTab === 'queue'
               ? 'border-indigo-600 text-indigo-700 font-extrabold'
               : 'border-transparent text-slate-500 hover:text-slate-900'
@@ -338,7 +338,7 @@ export const SecretaryWorkspacePage: React.FC = () => {
 
         <button
           onClick={() => handleTabChange('tasks')}
-          className={`pb-3 px-4 border-b-2 flex items-center gap-2 transition-all cursor-pointer ${
+          className={`pb-3 px-3 sm:px-4 border-b-2 flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
             activeTab === 'tasks'
               ? 'border-indigo-600 text-indigo-700 font-extrabold'
               : 'border-transparent text-slate-500 hover:text-slate-900'
@@ -355,7 +355,7 @@ export const SecretaryWorkspacePage: React.FC = () => {
 
         <button
           onClick={() => handleTabChange('calls')}
-          className={`pb-3 px-4 border-b-2 flex items-center gap-2 transition-all cursor-pointer ${
+          className={`pb-3 px-3 sm:px-4 border-b-2 flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
             activeTab === 'calls'
               ? 'border-indigo-600 text-indigo-700 font-extrabold'
               : 'border-transparent text-slate-500 hover:text-slate-900'
@@ -367,7 +367,7 @@ export const SecretaryWorkspacePage: React.FC = () => {
 
         <button
           onClick={() => handleTabChange('logs')}
-          className={`pb-3 px-4 border-b-2 flex items-center gap-2 transition-all cursor-pointer ${
+          className={`pb-3 px-3 sm:px-4 border-b-2 flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
             activeTab === 'logs'
               ? 'border-indigo-600 text-indigo-700 font-extrabold'
               : 'border-transparent text-slate-500 hover:text-slate-900'

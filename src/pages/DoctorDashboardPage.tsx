@@ -153,6 +153,28 @@ export const DoctorDashboardPage: React.FC = () => {
   const completedCount = appointments.filter(a => a.status === 'completed').length;
   const nextInLine = waitingPatients[0] || appointments.find(a => a.status === 'scheduled');
 
+  // Listen to mobile quick clinical action trigger
+  useEffect(() => {
+    const handleQuickAction = () => {
+      const inVisit = appointments.find(a => a.status === 'in_visit');
+      if (inVisit) {
+        handleOpenPatientRecord(inVisit);
+        return;
+      }
+      const next = appointments.find(a => a.status === 'arrived') || appointments.find(a => a.status === 'scheduled');
+      if (next) {
+        handleUpdateStatus(next.id, 'in_visit');
+        handleOpenPatientRecord(next);
+        return;
+      }
+      handleTabChange('clinical');
+    };
+    window.addEventListener('synapse_open_doctor_clinical', handleQuickAction);
+    return () => {
+      window.removeEventListener('synapse_open_doctor_clinical', handleQuickAction);
+    };
+  }, [appointments]);
+
   if (!activeDoctorId && currentUser.role === 'doctor') {
     return (
       <div id="doctor-dashboard-unlinked" className="max-w-xl mx-auto my-12 p-8 bg-white border border-amber-200 rounded-3xl shadow-sm text-center space-y-4">

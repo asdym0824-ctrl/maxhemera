@@ -123,6 +123,7 @@ export interface DoctorServiceMeta {
   price?: number;
   featured?: boolean;
   relatedServiceId?: string;
+  category?: string;
 }
 
 export type DetailedService = DoctorServiceMeta;

@@ -31,7 +31,11 @@ import {
   ChevronDown,
   ChevronUp,
   Clock,
-  ExternalLink
+  ExternalLink,
+  CheckSquare,
+  Globe,
+  BarChart3,
+  Zap
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Doctor, Appointment } from '../../types';
@@ -149,6 +153,105 @@ export const MobileHamburgerDrawer: React.FC<MobileHamburgerDrawerProps> = ({
 
   // All accessible parts of the entire website
   const navCategories: NavCategory[] = useMemo(() => [
+    ...(currentUser?.role === 'doctor' ? [{
+      id: 'doctor-shortcuts',
+      title: 'میزکار و پرتال بالینی پزشک',
+      items: [
+        {
+          id: 'doc-clinical-tab',
+          title: 'صف ویزیت و نوبت‌های امروز',
+          subtitle: 'مدیریت بیماران، سوابق و وضعیت ویزیت امروز',
+          path: '/doctor?tab=clinical',
+          icon: <Stethoscope className="w-4 h-4" />,
+          iconColor: 'bg-blue-900 text-blue-200',
+          badge: 'شیفت امروز',
+          badgeColor: 'bg-blue-600 text-white',
+          keywords: ['میزکار', 'بالینی', 'صف', 'ویزیت', 'پرونده', 'پزشک']
+        },
+        {
+          id: 'doc-tasks-tab',
+          title: 'دستورات و پیگیری‌های منشی',
+          subtitle: 'ارجاعات، پیگیری جواب آزمایش و تسک‌ها',
+          path: '/doctor?tab=tasks',
+          icon: <CheckSquare className="w-4 h-4" />,
+          iconColor: 'bg-indigo-50 text-indigo-600',
+          keywords: ['تسک', 'منشی', 'دستورات', 'پیگیری', 'کارتابل']
+        },
+        {
+          id: 'doc-website-tab',
+          title: 'مدیریت وب‌سایت اختصاصی پزشک',
+          subtitle: 'تنظیمات بیوگرافی، ساعات حضور و مقالات',
+          path: '/doctor?tab=website',
+          icon: <Globe className="w-4 h-4" />,
+          iconColor: 'bg-slate-100 text-slate-800',
+          keywords: ['وبسایت', 'سایت', 'پروفایل', 'شخصی']
+        }
+      ]
+    }] : []),
+    ...((currentUser?.role === 'clinic_manager' || currentUser?.role === 'branch_manager' || currentUser?.role === 'super_admin' || location.pathname.startsWith('/clinic')) ? [{
+      id: 'clinic-shortcuts',
+      title: 'مرکز عملیات و مدیریت همرا کلینیک',
+      items: [
+        {
+          id: 'clinic-overview-tab',
+          title: 'پایش لحظه‌ای عملیات و صف',
+          subtitle: 'مانیتورینگ نوبت‌ها، صف انتظار و بهره‌وری شیفت',
+          path: '/clinic?tab=overview',
+          icon: <BarChart3 className="w-4 h-4" />,
+          iconColor: 'bg-purple-900 text-purple-200',
+          badge: 'عملیات زنده',
+          badgeColor: 'bg-purple-600 text-white',
+          keywords: ['عملیات', 'پایش', 'صف', 'کلینیک', 'بهره وری', 'داشبورد']
+        },
+        {
+          id: 'clinic-staff-tab',
+          title: 'مدیریت پرسنل و شیفت‌ها',
+          subtitle: 'پزشکان، منشی‌ها، شیفت‌بندی و وضعیت حضور',
+          path: '/clinic?tab=staff',
+          icon: <Users className="w-4 h-4" />,
+          iconColor: 'bg-purple-50 text-purple-700',
+          keywords: ['پرسنل', 'شیفت', 'کارکنان', 'پزشک', 'منشی']
+        },
+        {
+          id: 'clinic-tasks-tab',
+          title: 'کارتابل وظایف کلینیک (Task Engine)',
+          subtitle: 'پایش و پیگیری تمامی تسک‌های صادرشده',
+          path: '/clinic?tab=tasks',
+          icon: <CheckSquare className="w-4 h-4" />,
+          iconColor: 'bg-indigo-50 text-indigo-700',
+          keywords: ['تسک', 'وظایف', 'کارتابل', 'پیگیری']
+        },
+        {
+          id: 'clinic-automations-tab',
+          title: 'قوانین اتوماسیون و پیامک‌ها',
+          subtitle: 'تنظیم تریگرهای پیامکی، فراخوانی خودکار و یادآوری',
+          path: '/clinic?tab=automations',
+          icon: <Zap className="w-4 h-4" />,
+          iconColor: 'bg-amber-50 text-amber-700',
+          keywords: ['اتوماسیون', 'پیامک', 'اس ام اس', 'قوانین', 'هوشمند']
+        },
+        {
+          id: 'clinic-branding-tab',
+          title: 'برندینگ و توسعه کلینیک',
+          subtitle: 'طراحی، سئو و شخصی‌سازی پرتال و هویت بصری',
+          path: '/clinic?tab=branding',
+          icon: <Sparkles className="w-4 h-4" />,
+          iconColor: 'bg-fuchsia-50 text-fuchsia-700',
+          badge: 'جدید',
+          badgeColor: 'bg-fuchsia-600 text-white',
+          keywords: ['برندینگ', 'سئو', 'توسعه', 'قالب', 'پرتال']
+        },
+        {
+          id: 'clinic-audit-tab',
+          title: 'لاگ حسابرسی و رویدادها (Audit Trail)',
+          subtitle: 'گزارش امنیتی کلیه اقدامات و تغییرات کاربران',
+          path: '/clinic?tab=audit',
+          icon: <Activity className="w-4 h-4" />,
+          iconColor: 'bg-slate-100 text-slate-700',
+          keywords: ['لاگ', 'حسابرسی', 'امنیت', 'رویداد']
+        }
+      ]
+    }] : []),
     {
       id: 'main',
       title: 'صفحات اصلی و نوبت‌دهی',

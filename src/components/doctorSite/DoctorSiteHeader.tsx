@@ -16,7 +16,7 @@ import {
 import { Doctor } from '../../types';
 import { ThemeStyles } from './themeConfig';
 import { useAuth } from '../../context/AuthContext';
-import { getDoctorSubdomain } from '../../utils/doctorWebsiteUtils';
+import { getDoctorSubdomain, getDoctorOfficialSiteUrl } from '../../utils/doctorWebsiteUtils';
 
 interface Props {
   doctor: Doctor;
@@ -140,10 +140,10 @@ export const DoctorSiteHeader: React.FC<Props> = ({
             <span 
               className="hidden md:inline-flex items-center gap-1.5 bg-slate-800 text-blue-300 px-2 py-0.5 rounded-md border border-slate-700/80 text-[11px] font-mono" 
               dir="ltr"
-              title="نشانی ساب‌دامنه رسمی در سامانه همرا"
+              title="نشانی رسمی در سامانه همرا"
             >
               <Globe className="w-3 h-3 text-blue-400" />
-              <span>{getDoctorSubdomain(doctor)}</span>
+              <span>{getDoctorOfficialSiteUrl(doctor).displayUrl}</span>
             </span>
           </div>
           <div className="flex items-center gap-2.5">

@@ -132,7 +132,7 @@ const MainAppLayout: React.FC = () => {
       <Header />
 
       {/* Main Render Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 pt-6 pb-24 sm:pb-28 xl:pb-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3.5 sm:px-6 pt-3 sm:pt-6 pb-20 sm:pb-28 xl:pb-8">
         <Routes>
           <Route
             path="/"

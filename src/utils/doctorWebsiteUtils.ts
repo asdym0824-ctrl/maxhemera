@@ -38,6 +38,56 @@ export function getDoctorSubdomain(doctorOrSlug?: { slug?: string; websiteConfig
 }
 
 /**
+ * Checks if this is the primary/first doctor website (uses main Hamrah domain link).
+ * Per requirement: First site uses main Hamrah link (hemera.clinic/dr/slug), other sites use Hamrah subdomain (slug.hemera.clinic).
+ */
+export function isPrimaryDoctorSite(doctorOrSlug?: { id?: string; slug?: string } | string | null): boolean {
+  if (!doctorOrSlug) return false;
+  if (typeof doctorOrSlug === 'string') {
+    return doctorOrSlug === 'dr-maryam-hosseini' || doctorOrSlug === 'doc-1';
+  }
+  return doctorOrSlug.id === 'doc-1' || doctorOrSlug.slug === 'dr-maryam-hosseini';
+}
+
+/**
+ * Returns the exact public URL configuration for a doctor site:
+ * - First doctor (سایت اول): uses main Hamrah link e.g. hemera.clinic/dr/dr-maryam-hosseini
+ * - Other doctors (مابقی سایت‌ها): use Hamrah subdomain e.g. dr-alireza-karimi.hemera.clinic
+ */
+export function getDoctorOfficialSiteUrl(doctorOrSlug?: { id?: string; slug?: string; websiteConfig?: { websiteSubdomain?: string } } | string | null): {
+  url: string;
+  displayUrl: string;
+  isPrimary: boolean;
+  badgeLabel: string;
+  subdomainOnly: string;
+} {
+  const isPrimary = isPrimaryDoctorSite(doctorOrSlug);
+  const slug = typeof doctorOrSlug === 'string' ? doctorOrSlug : (doctorOrSlug?.slug || 'doctor');
+
+  if (isPrimary) {
+    const displayUrl = `hemera.clinic/dr/${slug}`;
+    return {
+      url: `https://${displayUrl}`,
+      displayUrl,
+      isPrimary: true,
+      badgeLabel: 'لینک اختصاصی همرا',
+      subdomainOnly: 'hemera.clinic'
+    };
+  }
+
+  // Other doctors: use Hamrah subdomain
+  const cleanSub = slug.replace(/^(dr-)?/, '').replace(/[^a-zA-Z0-9-]/g, '').toLowerCase();
+  const subdomain = `dr-${cleanSub || 'specialist'}.hemera.clinic`;
+  return {
+    url: `https://${subdomain}`,
+    displayUrl: subdomain,
+    isPrimary: false,
+    badgeLabel: 'ساب‌دامنه اختصاصی همرا',
+    subdomainOnly: `dr-${cleanSub || 'specialist'}`
+  };
+}
+
+/**
  * Returns the full HTTPS URL for the doctor's subdomain
  * e.g. 'https://dr-maryam.hamrah.ir'
  */

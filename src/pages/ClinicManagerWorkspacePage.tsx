@@ -95,14 +95,26 @@ export const ClinicManagerWorkspacePage: React.FC = () => {
       setLoading(false);
     }
     const handleUpdate = () => loadData();
+    const handleQuickAction = () => {
+      const el = document.getElementById('clinic-ai-advisor');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('ring-4', 'ring-purple-400');
+        setTimeout(() => {
+          el.classList.remove('ring-4', 'ring-purple-400');
+        }, 1800);
+      }
+    };
     window.addEventListener('synapse_appointments_updated', handleUpdate);
     window.addEventListener('synapse_tasks_updated', handleUpdate);
     window.addEventListener('synapse_activity_updated', handleUpdate);
+    window.addEventListener('synapse_open_clinic_quick_action', handleQuickAction);
 
     return () => {
       window.removeEventListener('synapse_appointments_updated', handleUpdate);
       window.removeEventListener('synapse_tasks_updated', handleUpdate);
       window.removeEventListener('synapse_activity_updated', handleUpdate);
+      window.removeEventListener('synapse_open_clinic_quick_action', handleQuickAction);
     };
   }, [clinicId, branchId]);
 
@@ -164,10 +176,10 @@ export const ClinicManagerWorkspacePage: React.FC = () => {
       <ClinicAiAdvisor />
 
       {/* Navigation Tabs */}
-      <div className="flex border-b border-slate-200 gap-2 text-xs font-bold">
+      <div className="flex border-b border-slate-200 gap-1 sm:gap-2 text-xs font-bold overflow-x-auto no-scrollbar flex-nowrap scroll-smooth -mx-4 px-4 sm:mx-0 sm:px-0">
         <button
           onClick={() => handleTabChange('overview')}
-          className={`pb-3 px-4 border-b-2 flex items-center gap-2 transition-all cursor-pointer ${
+          className={`pb-3 px-3 sm:px-4 border-b-2 flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
             activeTab === 'overview'
               ? 'border-purple-600 text-purple-700 font-extrabold'
               : 'border-transparent text-slate-500 hover:text-slate-900'
@@ -179,31 +191,36 @@ export const ClinicManagerWorkspacePage: React.FC = () => {
 
         <button
           onClick={() => handleTabChange('staff')}
-          className={`pb-3 px-4 border-b-2 flex items-center gap-2 transition-all cursor-pointer ${
+          className={`pb-3 px-3 sm:px-4 border-b-2 flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
             activeTab === 'staff'
               ? 'border-purple-600 text-purple-700 font-extrabold'
               : 'border-transparent text-slate-500 hover:text-slate-900'
           }`}
         >
           <Users className="w-4 h-4" />
-          <span>پرسنل و شیفت‌ها ({staffList.length})</span>
+          <span>پرسنل و شیفت‌ها</span>
+          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+            activeTab === 'staff' ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-600'
+          }`}>
+            {staffList.length}
+          </span>
         </button>
 
         <button
           onClick={() => handleTabChange('tasks')}
-          className={`pb-3 px-4 border-b-2 flex items-center gap-2 transition-all cursor-pointer ${
+          className={`pb-3 px-3 sm:px-4 border-b-2 flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
             activeTab === 'tasks'
               ? 'border-purple-600 text-purple-700 font-extrabold'
               : 'border-transparent text-slate-500 hover:text-slate-900'
           }`}
         >
           <CheckSquare className="w-4 h-4" />
-          <span>تمام وظایف پرسنل (Task Engine)</span>
+          <span>وظایف پرسنل (Task Engine)</span>
         </button>
 
         <button
           onClick={() => handleTabChange('automations')}
-          className={`pb-3 px-4 border-b-2 flex items-center gap-2 transition-all cursor-pointer ${
+          className={`pb-3 px-3 sm:px-4 border-b-2 flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
             activeTab === 'automations'
               ? 'border-purple-600 text-purple-700 font-extrabold'
               : 'border-transparent text-slate-500 hover:text-slate-900'
@@ -215,19 +232,19 @@ export const ClinicManagerWorkspacePage: React.FC = () => {
 
         <button
           onClick={() => handleTabChange('audit')}
-          className={`pb-3 px-4 border-b-2 flex items-center gap-2 transition-all cursor-pointer ${
+          className={`pb-3 px-3 sm:px-4 border-b-2 flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
             activeTab === 'audit'
               ? 'border-purple-600 text-purple-700 font-extrabold'
               : 'border-transparent text-slate-500 hover:text-slate-900'
           }`}
         >
           <Activity className="w-4 h-4" />
-          <span>لاگ حسابرسی رویدادها (Audit Trail)</span>
+          <span>لاگ حسابرسی و رویدادها</span>
         </button>
 
         <button
           onClick={() => handleTabChange('branding')}
-          className={`pb-3 px-4 border-b-2 flex items-center gap-2 transition-all cursor-pointer ${
+          className={`pb-3 px-3 sm:px-4 border-b-2 flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap shrink-0 ${
             activeTab === 'branding'
               ? 'border-purple-600 text-purple-700 font-extrabold'
               : 'border-transparent text-slate-500 hover:text-slate-900'

@@ -39,6 +39,7 @@ import { DoctorSiteContact } from '../../components/doctorSite/DoctorSiteContact
 import { DoctorSiteFooter } from '../../components/doctorSite/DoctorSiteFooter';
 import { DoctorSiteFloatingAssistant } from '../../components/doctorSite/DoctorSiteFloatingAssistant';
 import { DoctorSiteMiniAccountModal } from '../../components/doctorSite/DoctorSiteMiniAccountModal';
+import { MobileDoctorSiteView } from '../../components/doctorSite/MobileDoctorSiteView';
 import { AppointmentWizard } from '../../components/appointments/AppointmentWizard';
 import { MOCK_DISEASES } from '../../data/mockData';
 import { bookingIntentService } from '../../services/bookingIntentService';
@@ -453,16 +454,18 @@ export const DoctorSitePage: React.FC = () => {
           </div>
         )}
 
-        {/* Header & Navigation Bar */}
-        <DoctorSiteHeader
-          doctor={doctor}
-          theme={theme}
-          activeSubpage={subpage}
-          onNavigateSubpage={handleNavigateSubpage}
-          onBookClick={() => handleOpenBooking()}
-          onOpenAccountModal={() => setIsAccountModalOpen(true)}
-          hasArticles={doctorArticles.length > 0}
-        />
+        {/* Header & Navigation Bar (On mobile home, MobileDoctorSiteView provides its own specialized mobile header) */}
+        <div className={subpage === 'home' || subpage === '' ? 'hidden lg:block' : 'block'}>
+          <DoctorSiteHeader
+            doctor={doctor}
+            theme={theme}
+            activeSubpage={subpage}
+            onNavigateSubpage={handleNavigateSubpage}
+            onBookClick={() => handleOpenBooking()}
+            onOpenAccountModal={() => setIsAccountModalOpen(true)}
+            hasArticles={doctorArticles.length > 0}
+          />
+        </div>
 
         {/* Dynamic Main View */}
         <main>
@@ -611,51 +614,68 @@ export const DoctorSitePage: React.FC = () => {
           ) : subpage === 'home' || subpage === '' ? (
             /* Home / Full Multi-Section Page */
             <div>
-              <DoctorSiteHero
+              {/* 1. MOBILE ONLY: Highly Specialized Need-Fulfilling Doctor Portal */}
+              <MobileDoctorSiteView
                 doctor={doctor}
                 theme={theme}
-                onBookInPerson={() => handleOpenBooking('ویزیت حضوری مطب')}
-                onBookOnline={() => handleOpenBooking('مشاوره آنلاین تصویری')}
+                articles={doctorArticles}
+                availableDoctors={availableDoctors}
+                onBookInPerson={(note, officeTitle, officeId) => handleOpenBooking(note, officeTitle, officeId)}
+                onBookOnline={(note) => handleOpenBooking(note || 'مشاوره آنلاین تصویری')}
+                onNavigateDoctor={(slug) => {
+                  navigate(`/site/${slug}`);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
               />
 
-              <DoctorSiteAbout doctor={doctor} theme={theme} />
+              {/* 2. DESKTOP ONLY: Multi-Section Layout */}
+              <div className="hidden lg:block">
+                <DoctorSiteHero
+                  doctor={doctor}
+                  theme={theme}
+                  onBookInPerson={() => handleOpenBooking('ویزیت حضوری مطب')}
+                  onBookOnline={() => handleOpenBooking('مشاوره آنلاین تصویری')}
+                />
 
-              <DoctorSiteServices
-                doctor={doctor}
-                theme={theme}
-                onBookService={(srv) => handleOpenBooking(srv ? `درخواست خدمت: ${srv}` : undefined)}
-              />
+                <DoctorSiteAbout doctor={doctor} theme={theme} />
 
-              <DoctorSiteConditions
-                doctor={doctor}
-                theme={theme}
-                onBookCondition={(name) => handleOpenBooking(`درخواست ویزیت: ${name}`)}
-              />
+                <DoctorSiteServices
+                  doctor={doctor}
+                  theme={theme}
+                  onBookService={(srv) => handleOpenBooking(srv ? `درخواست خدمت: ${srv}` : undefined)}
+                />
 
-              <DoctorSiteAchievements doctor={doctor} theme={theme} />
+                <DoctorSiteConditions
+                  doctor={doctor}
+                  theme={theme}
+                  onBookCondition={(name) => handleOpenBooking(`درخواست ویزیت: ${name}`)}
+                />
 
-              <DoctorSiteArticles
-                doctor={doctor}
-                theme={theme}
-              />
+                <DoctorSiteAchievements doctor={doctor} theme={theme} />
 
-              <DoctorSiteVideos
-                doctor={doctor}
-                theme={theme}
-                onBookClick={(note) => handleOpenBooking(note)}
-              />
+                <DoctorSiteArticles
+                  doctor={doctor}
+                  theme={theme}
+                />
 
-              <DoctorSiteReviews doctor={doctor} theme={theme} />
+                <DoctorSiteVideos
+                  doctor={doctor}
+                  theme={theme}
+                  onBookClick={(note) => handleOpenBooking(note)}
+                />
 
-              <DoctorSiteGallery doctor={doctor} theme={theme} />
+                <DoctorSiteReviews doctor={doctor} theme={theme} />
 
-              <DoctorSiteFAQ doctor={doctor} theme={theme} />
+                <DoctorSiteGallery doctor={doctor} theme={theme} />
 
-              <DoctorSiteOffices
-                doctor={doctor}
-                theme={theme}
-                onBookOffice={(office, offId) => handleOpenBooking(office ? `مطب: ${office}` : undefined, office, offId)}
-              />
+                <DoctorSiteFAQ doctor={doctor} theme={theme} />
+
+                <DoctorSiteOffices
+                  doctor={doctor}
+                  theme={theme}
+                  onBookOffice={(office, offId) => handleOpenBooking(office ? `مطب: ${office}` : undefined, office, offId)}
+                />
+              </div>
             </div>
           ) : (
             /* 404 for unrecognized subpage */
@@ -682,7 +702,9 @@ export const DoctorSitePage: React.FC = () => {
       </div>
 
       {/* Footer */}
-      <DoctorSiteFooter doctor={doctor} theme={theme} />
+      <div className={subpage === 'home' || subpage === '' ? 'hidden lg:block' : 'block'}>
+        <DoctorSiteFooter doctor={doctor} theme={theme} />
+      </div>
 
       {/* Doctor-Specific Floating AI Assistant */}
       <DoctorSiteFloatingAssistant

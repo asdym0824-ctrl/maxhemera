@@ -305,7 +305,7 @@ export const DoctorSiteFloatingAssistant: React.FC<Props> = ({
   };
 
   return (
-    <div className="fixed bottom-6 left-6 z-50 font-sans" dir="rtl">
+    <div className="fixed bottom-20 left-4 sm:bottom-6 sm:left-6 z-40 font-sans" dir="rtl">
       {/* Trigger Button */}
       {!isOpen && (
         <button
