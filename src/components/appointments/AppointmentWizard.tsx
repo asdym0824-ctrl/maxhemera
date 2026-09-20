@@ -22,7 +22,10 @@ import {
   Building2,
   RefreshCw,
   Ban,
-  Info
+  Info,
+  UserPlus,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { Button } from '../common/Button';
 import { Badge } from '../common/Badge';
@@ -51,7 +54,7 @@ export const AppointmentWizard: React.FC<AppointmentWizardProps> = ({
   onComplete,
   onCancel
 }) => {
-  const { currentUser, isLoggedIn, loginWithPhone } = useAuth();
+  const { currentUser, isLoggedIn, loginWithPassword, registerUser } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -132,9 +135,13 @@ export const AppointmentWizard: React.FC<AppointmentWizardProps> = ({
   }, [doctor.id, matchedIntent?.id]);
 
   // Inline Quick Login State for seamless logged-out booking continuity
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [authPhone, setAuthPhone] = useState(currentUser?.phone || '');
-  const [authOtp, setAuthOtp] = useState('');
-  const [authStage, setAuthStage] = useState<'phone' | 'otp'>('phone');
+  const [authPassword, setAuthPassword] = useState('123456');
+  const [regName, setRegName] = useState('');
+  const [regPhone, setRegPhone] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
@@ -221,38 +228,65 @@ export const AppointmentWizard: React.FC<AppointmentWizardProps> = ({
     setStep(nextStepNum);
   };
 
-  // Inline Quick OTP Send
-  const handleSendQuickOtp = (e: React.FormEvent) => {
+  // Inline Quick Password Login
+  const handleInlineLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(null);
-    if (!isValidIranianMobile(authPhone)) {
-      setAuthError('لطفاً شماره همراه معتبر (۱۱ رقم با ۰۹) وارد نمایید.');
+    const cleanId = authPhone.trim();
+    if (!cleanId) {
+      setAuthError('لطفاً شماره همراه یا کدملی خود را وارد نمایید.');
       return;
     }
-    const formatted = formatStandardIranianMobile(authPhone);
-    setAuthPhone(formatted);
-    setIsAuthLoading(true);
-    setTimeout(() => {
-      setIsAuthLoading(false);
-      setAuthStage('otp');
-      setAuthOtp('123456'); // Pre-fill mock OTP for smooth testing
-    }, 400);
-  };
-
-  // Inline Quick OTP Verify & Resume
-  const handleVerifyQuickOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError(null);
+    if (!authPassword.trim()) {
+      setAuthError('لطفاً رمز عبور خود را وارد نمایید.');
+      return;
+    }
     setIsAuthLoading(true);
     try {
-      const ok = await loginWithPhone(authPhone, authOtp);
-      if (ok) {
+      const result = await loginWithPassword(cleanId, authPassword.trim());
+      if (result.success) {
         persistCurrentIntent(3);
       } else {
-        setAuthError('کد تأیید نامعتبر است.');
+        setAuthError(result.error || 'شماره همراه یا رمز عبور نادرست است.');
       }
     } catch {
-      setAuthError('خطا در ورود به سامانه.');
+      setAuthError('خطا در برقراری ارتباط با سرور احراز هویت.');
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
+  // Inline Quick Register
+  const handleInlineRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    if (!regName.trim()) {
+      setAuthError('لطفاً نام و نام خانوادگی بیمار را وارد نمایید.');
+      return;
+    }
+    const cleanNumber = regPhone.replace(/\D/g, '');
+    if (!cleanNumber.startsWith('09') || cleanNumber.length !== 11) {
+      setAuthError('شماره همراه باید ۱۱ رقم و با ۰۹ شروع شود.');
+      return;
+    }
+    if (!regPassword || regPassword.trim().length < 4) {
+      setAuthError('رمز عبور باید حداقل ۴ کاراکتر باشد.');
+      return;
+    }
+    setIsAuthLoading(true);
+    try {
+      const result = await registerUser({
+        name: regName.trim(),
+        phone: cleanNumber,
+        password: regPassword.trim()
+      });
+      if (result.success) {
+        persistCurrentIntent(3);
+      } else {
+        setAuthError(result.error || 'خطا در ثبت‌نام کاربر.');
+      }
+    } catch {
+      setAuthError('خطا در ثبت‌نام حساب کاربری.');
     } finally {
       setIsAuthLoading(false);
     }
@@ -364,28 +398,28 @@ export const AppointmentWizard: React.FC<AppointmentWizardProps> = ({
   const isUserAuthenticated = !!currentUser && !!currentUser.id && isLoggedIn;
 
   return (
-    <div className="bg-white rounded-3xl border border-slate-200/80 shadow-lg overflow-hidden max-w-2xl mx-auto my-6 text-right font-sans" dir="rtl">
+    <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-lg overflow-hidden max-w-2xl mx-auto my-0 sm:my-2 text-right font-sans" dir="rtl">
       {/* Stepper Header */}
       {step <= 5 ? (
-        <div className="bg-slate-900 text-white p-6 border-b border-slate-800 space-y-4">
+        <div className="bg-slate-900 text-white p-4 sm:p-6 border-b border-slate-800 space-y-3 sm:space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <img
                 src={doctor.avatar}
                 alt={doctor.name}
-                className="w-12 h-12 rounded-2xl object-cover border border-slate-700"
+                className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl object-cover border border-slate-700"
                 referrerPolicy="no-referrer"
               />
               <div>
-                <h3 className="font-bold text-base text-white">{doctor.name}</h3>
-                <p className="text-xs text-blue-300">{doctor.specialtyName}</p>
+                <h3 className="font-bold text-sm sm:text-base text-white">{doctor.name}</h3>
+                <p className="text-[11px] sm:text-xs text-blue-300">{doctor.specialtyName}</p>
               </div>
             </div>
             <Badge variant="blue">مرحله {step} از ۵</Badge>
           </div>
 
           {/* Step Progress Bar */}
-          <div className="grid grid-cols-5 gap-1.5 pt-2">
+          <div className="grid grid-cols-5 gap-1.5 pt-1 sm:pt-2">
             {[1, 2, 3, 4, 5].map(sNum => (
               <div
                 key={sNum}
@@ -397,21 +431,21 @@ export const AppointmentWizard: React.FC<AppointmentWizardProps> = ({
           </div>
         </div>
       ) : (
-        <div className="bg-emerald-900 text-white p-6 border-b border-emerald-800 flex items-center justify-between">
+        <div className="bg-emerald-900 text-white p-4 sm:p-6 border-b border-emerald-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-300 flex items-center justify-center font-bold">
-              <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-emerald-500/20 text-emerald-300 flex items-center justify-center font-bold">
+              <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-400" />
             </div>
             <div>
-              <h3 className="font-bold text-base text-white">نوبت با موفقیت ثبت شد</h3>
-              <p className="text-xs text-emerald-200">اطلاعات نوبت و کد پیگیری رزرو شما</p>
+              <h3 className="font-bold text-sm sm:text-base text-white">نوبت با موفقیت ثبت شد</h3>
+              <p className="text-[11px] sm:text-xs text-emerald-200">اطلاعات نوبت و کد پیگیری رزرو شما</p>
             </div>
           </div>
           <Badge variant="emerald">تأیید شده</Badge>
         </div>
       )}
 
-      <div className="p-6 sm:p-8 space-y-6">
+      <div className="p-4 sm:p-8 space-y-4 sm:space-y-6">
         {/* Step 1: Visit Type */}
         {step === 1 && (
           <div className="space-y-4 animate-in fade-in duration-200">
@@ -420,26 +454,26 @@ export const AppointmentWizard: React.FC<AppointmentWizardProps> = ({
               مرحله ۱: انتخاب نوع ویزیت
             </h4>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div
                 onClick={() => setVisitType('in_person')}
-                className={`p-5 rounded-2xl border-2 transition-all cursor-pointer space-y-2 ${
+                className={`p-3.5 sm:p-5 rounded-2xl border-2 transition-all cursor-pointer space-y-1.5 sm:space-y-2 ${
                   visitType === 'in_person'
                     ? 'border-blue-600 bg-blue-50/50 text-blue-950 shadow-xs'
                     : 'border-slate-200 hover:border-slate-300 text-slate-700'
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
-                    <MapPin className="w-5 h-5" />
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
+                    <MapPin className="w-4 h-4 sm:w-5 sm:h-5" />
                   </div>
                   {visitType === 'in_person' && <CheckCircle2 className="w-5 h-5 text-blue-600" />}
                 </div>
-                <div className="font-bold text-sm">ویزیت حضوری در مطب / کلینیک</div>
-                <p className="text-xs text-slate-500 leading-relaxed">
+                <div className="font-bold text-xs sm:text-sm">ویزیت حضوری در مطب / کلینیک</div>
+                <p className="text-[11px] sm:text-xs text-slate-500 leading-relaxed line-clamp-2">
                   مراجعه حضوری به مطب دکتر ({officeTitle || doctor.address.split('،')[0]})
                 </p>
-                <div className="text-xs font-bold text-blue-700 pt-1">
+                <div className="text-xs font-bold text-blue-700 pt-0.5">
                   تعرفه: {doctor.consultationFee.toLocaleString('fa-IR')} تومان
                 </div>
               </div>
@@ -447,23 +481,23 @@ export const AppointmentWizard: React.FC<AppointmentWizardProps> = ({
               {doctor.hasOnlineConsultation && (
                 <div
                   onClick={() => setVisitType('online_video')}
-                  className={`p-5 rounded-2xl border-2 transition-all cursor-pointer space-y-2 ${
+                  className={`p-3.5 sm:p-5 rounded-2xl border-2 transition-all cursor-pointer space-y-1.5 sm:space-y-2 ${
                     visitType === 'online_video'
                       ? 'border-sky-600 bg-sky-50/50 text-sky-950 shadow-xs'
                       : 'border-slate-200 hover:border-slate-300 text-slate-700'
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <div className="w-10 h-10 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center font-bold">
-                      <Video className="w-5 h-5" />
+                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center font-bold">
+                      <Video className="w-4 h-4 sm:w-5 sm:h-5" />
                     </div>
                     {visitType === 'online_video' && <CheckCircle2 className="w-5 h-5 text-sky-600" />}
                   </div>
-                  <div className="font-bold text-sm">ویزیت ویدئویی آنلاین</div>
-                  <p className="text-xs text-slate-500 leading-relaxed">
+                  <div className="font-bold text-xs sm:text-sm">ویزیت ویدئویی آنلاین</div>
+                  <p className="text-[11px] sm:text-xs text-slate-500 leading-relaxed line-clamp-2">
                     ارتباط تصویری امن مستقیماً داخل سامانه بدون نیاز به حضور فیزیکی
                   </p>
-                  <div className="text-xs font-bold text-sky-700 pt-1">
+                  <div className="text-xs font-bold text-sky-700 pt-0.5">
                     تعرفه: {(doctor.onlineConsultationFee || 280000).toLocaleString('fa-IR')} تومان
                   </div>
                 </div>
@@ -627,7 +661,7 @@ export const AppointmentWizard: React.FC<AppointmentWizardProps> = ({
                     <span>تأیید هویت و ادامه فرایند نوبت‌دهی</span>
                   </div>
                   <p className="text-xs text-blue-800 leading-relaxed">
-                    زمان انتخاب شده ({formatToPersianDate(selectedDate)} - ساعت {selectedSlot}) برای شما رزرو موقت شده است. جهت ثبت پرونده و صدور کد رهگیری، شماره موبایل خود را وارد نمایید.
+                    زمان انتخاب شده ({formatToPersianDate(selectedDate)} - ساعت {selectedSlot}) برای شما رزرو موقت شده است. جهت ثبت پرونده و صدور نوبت، با رمز عبور خود وارد شوید یا به عنوان بیمار جدید ثبت‌نام نمایید.
                   </p>
                 </div>
 
@@ -638,23 +672,81 @@ export const AppointmentWizard: React.FC<AppointmentWizardProps> = ({
                   </div>
                 )}
 
-                {authStage === 'phone' ? (
-                  <form onSubmit={handleSendQuickOtp} className="space-y-4">
+                {/* Switch between Login and Register */}
+                <div className="flex p-1 bg-slate-100 rounded-xl text-xs font-bold text-slate-600">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode('login');
+                      setAuthError(null);
+                    }}
+                    className={`flex-1 py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      authMode === 'login'
+                        ? 'bg-white text-blue-700 shadow-xs'
+                        : 'hover:text-slate-900'
+                    }`}
+                  >
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>ورود با رمز عبور</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode('register');
+                      setAuthError(null);
+                    }}
+                    className={`flex-1 py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      authMode === 'register'
+                        ? 'bg-white text-emerald-700 shadow-xs'
+                        : 'hover:text-slate-900'
+                    }`}
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span>ثبت‌نام بیمار جدید</span>
+                  </button>
+                </div>
+
+                {authMode === 'login' ? (
+                  <form onSubmit={handleInlineLogin} className="space-y-3.5">
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-700 block">
-                        شماره همراه بیمار:
+                        شماره همراه یا کدملی:
                       </label>
                       <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus-within:ring-2 focus-within:ring-blue-600/30">
                         <Phone className="w-4 h-4 text-slate-400 ml-2 shrink-0" />
                         <input
-                          type="tel"
+                          type="text"
                           required
                           value={authPhone}
                           onChange={e => setAuthPhone(e.target.value)}
                           placeholder="۰۹۱۲۱۱۱۲۲۳۳"
-                          className="w-full bg-transparent outline-hidden font-mono font-bold text-slate-900 text-left"
+                          className="w-full bg-transparent outline-hidden font-mono font-bold text-slate-900 text-left text-xs"
                           dir="ltr"
                         />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 block">
+                        رمز عبور:
+                      </label>
+                      <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus-within:ring-2 focus-within:ring-blue-600/30">
+                        <Lock className="w-4 h-4 text-slate-400 ml-2 shrink-0" />
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          required
+                          value={authPassword}
+                          onChange={e => setAuthPassword(e.target.value)}
+                          placeholder="رمز عبور حساب"
+                          className="w-full bg-transparent outline-hidden font-mono text-slate-900 text-xs"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="text-slate-400 hover:text-slate-600 cursor-pointer mr-1"
+                        >
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
                       </div>
                     </div>
 
@@ -667,7 +759,7 @@ export const AppointmentWizard: React.FC<AppointmentWizardProps> = ({
                         type="submit"
                         icon={<ArrowLeft className="w-4 h-4" />}
                       >
-                        دریافت کد تأیید سریع
+                        ورود و ادامه نوبت‌دهی
                       </Button>
                       <Button
                         variant="outline"
@@ -681,45 +773,75 @@ export const AppointmentWizard: React.FC<AppointmentWizardProps> = ({
                     </div>
                   </form>
                 ) : (
-                  <form onSubmit={handleVerifyQuickOtp} className="space-y-4">
-                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs text-slate-700 flex items-center justify-between">
-                      <span>کد تأیید به شماره <strong>{authPhone}</strong> شبیه‌سازی شد. (کد تست: ۱۲۳۴۵۶)</span>
-                      <button
-                        type="button"
-                        onClick={() => setAuthStage('phone')}
-                        className="text-blue-600 hover:underline font-bold text-[11px]"
-                      >
-                        ویرایش شماره
-                      </button>
+                  <form onSubmit={handleInlineRegister} className="space-y-3.5">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 block">
+                        نام و نام خانوادگی بیمار:
+                      </label>
+                      <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus-within:ring-2 focus-within:ring-emerald-600/30">
+                        <UserIcon className="w-4 h-4 text-slate-400 ml-2 shrink-0" />
+                        <input
+                          type="text"
+                          required
+                          value={regName}
+                          onChange={e => setRegName(e.target.value)}
+                          placeholder="مثال: رضا محمدی"
+                          className="w-full bg-transparent outline-hidden text-slate-900 text-xs"
+                        />
+                      </div>
                     </div>
 
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-700 block">
-                        کد تأیید (کد آزمایشی: ۱۲۳۴۵۶):
+                        شماره همراه (۱۱ رقم):
                       </label>
-                      <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus-within:ring-2 focus-within:ring-blue-600/30">
+                      <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus-within:ring-2 focus-within:ring-emerald-600/30">
+                        <Phone className="w-4 h-4 text-slate-400 ml-2 shrink-0" />
+                        <input
+                          type="tel"
+                          required
+                          value={regPhone}
+                          onChange={e => setRegPhone(e.target.value)}
+                          placeholder="۰۹۱۲۳۴۵۶۷۸۹"
+                          className="w-full bg-transparent outline-hidden font-mono font-bold text-slate-900 text-left text-xs"
+                          dir="ltr"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 block">
+                        کلمه عبور دلخواه برای مراجعات بعدی:
+                      </label>
+                      <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus-within:ring-2 focus-within:ring-emerald-600/30">
                         <Lock className="w-4 h-4 text-slate-400 ml-2 shrink-0" />
                         <input
-                          type="text"
+                          type={showPassword ? 'text' : 'password'}
                           required
-                          maxLength={6}
-                          value={authOtp}
-                          onChange={e => setAuthOtp(e.target.value)}
-                          placeholder="123456"
-                          className="w-full bg-transparent outline-hidden font-mono font-black text-center text-lg tracking-widest text-slate-900"
+                          value={regPassword}
+                          onChange={e => setRegPassword(e.target.value)}
+                          placeholder="حداقل ۴ کاراکتر"
+                          className="w-full bg-transparent outline-hidden font-mono text-slate-900 text-xs"
                         />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="text-slate-400 hover:text-slate-600 cursor-pointer mr-1"
+                        >
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
                       </div>
                     </div>
 
                     <Button
                       variant="primary"
                       size="md"
-                      className="w-full"
+                      className="w-full bg-emerald-600 hover:bg-emerald-700"
                       isLoading={isAuthLoading}
                       type="submit"
                       icon={<CheckCircle2 className="w-4 h-4" />}
                     >
-                      تأیید و ادامه نوبت‌دهی
+                      ثبت‌نام و ادامه نوبت‌دهی
                     </Button>
                   </form>
                 )}
@@ -941,9 +1063,14 @@ export const AppointmentWizard: React.FC<AppointmentWizardProps> = ({
 
         {/* Wizard Controls */}
         {step < 6 && (
-          <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+          <div className="flex items-center justify-between gap-2.5 pt-3.5 sm:pt-4 border-t border-slate-100">
             {step > 1 ? (
-              <Button variant="outline" size="md" onClick={() => setStep(step - 1)}>
+              <Button
+                variant="outline"
+                size="md"
+                onClick={() => setStep(step - 1)}
+                className="min-h-[44px] text-xs sm:text-sm px-3.5 sm:px-4 shrink-0 rounded-xl font-bold"
+              >
                 مرحله قبل
               </Button>
             ) : (
@@ -954,6 +1081,7 @@ export const AppointmentWizard: React.FC<AppointmentWizardProps> = ({
                   bookingIntentService.clear();
                   onCancel();
                 }}
+                className="min-h-[44px] text-xs sm:text-sm px-3.5 sm:px-4 shrink-0 rounded-xl font-bold text-slate-500 hover:text-slate-800"
               >
                 انصراف
               </Button>
@@ -968,9 +1096,11 @@ export const AppointmentWizard: React.FC<AppointmentWizardProps> = ({
                   variant="primary"
                   size="md"
                   onClick={handleNextStep}
-                  icon={<ArrowLeft className="w-4 h-4" />}
+                  icon={<ArrowLeft className="w-4 h-4 shrink-0" />}
+                  className="min-h-[44px] flex-1 sm:flex-initial text-xs sm:text-sm px-4 py-2.5 rounded-xl font-bold justify-center"
                 >
-                  ادامه و مرحله بعد
+                  <span className="sm:hidden">مرحله بعد</span>
+                  <span className="hidden sm:inline">ادامه و مرحله بعد</span>
                 </Button>
               )
             ) : (
@@ -979,9 +1109,11 @@ export const AppointmentWizard: React.FC<AppointmentWizardProps> = ({
                 size="md"
                 isLoading={isSubmitting}
                 onClick={handleBookingSubmit}
-                icon={<CheckCircle2 className="w-4 h-4" />}
+                icon={<CheckCircle2 className="w-4 h-4 shrink-0" />}
+                className="min-h-[44px] flex-1 sm:flex-initial text-xs sm:text-sm px-4 py-2.5 rounded-xl font-bold justify-center"
               >
-                تأیید و ثبت نهایی نوبت (نمایشی)
+                <span className="sm:hidden">تأیید نهایی نوبت</span>
+                <span className="hidden sm:inline">تأیید و ثبت نهایی نوبت</span>
               </Button>
             )}
           </div>

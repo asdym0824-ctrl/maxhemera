@@ -35,7 +35,11 @@ import {
   CheckSquare,
   Globe,
   BarChart3,
-  Zap
+  Zap,
+  ShieldAlert,
+  DollarSign,
+  UserCheck,
+  PieChart
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Doctor, Appointment } from '../../types';
@@ -153,6 +157,86 @@ export const MobileHamburgerDrawer: React.FC<MobileHamburgerDrawerProps> = ({
 
   // All accessible parts of the entire website
   const navCategories: NavCategory[] = useMemo(() => [
+    ...((currentUser?.role === 'super_admin' || currentUser?.role === 'admin' || location.pathname.startsWith('/admin')) ? [{
+      id: 'super-admin-shortcuts',
+      title: 'فرماندهی ارشد و مانیتورینگ کلینیک‌ها (Super Admin)',
+      items: [
+        {
+          id: 'admin-overview-tab',
+          title: 'داشبورد ارشد و شاخص‌های کلیدی (KPI)',
+          subtitle: 'مانیتورینگ درآمد کل، شعب فعال و راندمان سیستم',
+          path: '/admin',
+          icon: <BarChart3 className="w-4 h-4" />,
+          iconColor: 'bg-rose-950 text-rose-300',
+          badge: 'مرکز فرماندهی',
+          badgeColor: 'bg-rose-600 text-white',
+          keywords: ['ادمین', 'سوپر ادمین', 'داشبورد', 'kpi', 'فرماندهی']
+        },
+        {
+          id: 'admin-crm-tab',
+          title: 'مدیریت ارتباط با مراجعین (CRM)',
+          subtitle: 'پرونده مراجعین، کانال‌های ورودی و نرخ بازگشت',
+          path: '/admin/crm',
+          icon: <UserCheck className="w-4 h-4" />,
+          iconColor: 'bg-rose-50 text-rose-600',
+          keywords: ['crm', 'مراجعین', 'پرونده', 'لید', 'مشتریان']
+        },
+        {
+          id: 'admin-finance-tab',
+          title: 'خزانه‌داری، مالی و سودآوری',
+          subtitle: 'تراز مالی شعب، تسویه‌حساب پزشکان و گردش حساب',
+          path: '/admin/finance',
+          icon: <DollarSign className="w-4 h-4" />,
+          iconColor: 'bg-emerald-50 text-emerald-600',
+          keywords: ['مالی', 'خزانه', 'درآمد', 'هزینه', 'سود', 'حسابداری']
+        },
+        {
+          id: 'admin-hr-tab',
+          title: 'منابع انسانی و ارزیابی پرسنل (HR)',
+          subtitle: 'عملکرد پرسنل، کارکرد پزشکان و ساعات کاری',
+          path: '/admin/hr',
+          icon: <Users className="w-4 h-4" />,
+          iconColor: 'bg-amber-50 text-amber-600',
+          keywords: ['hr', 'منابع انسانی', 'پرسنل', 'ارزیابی', 'کارمندان']
+        },
+        {
+          id: 'admin-marketing-tab',
+          title: 'کمپین‌های بازاریابی و جذب (Growth)',
+          subtitle: 'تحلیل کانال‌ها، نرخ تبدیل و کمپین‌های تبلیغاتی',
+          path: '/admin/marketing',
+          icon: <Zap className="w-4 h-4" />,
+          iconColor: 'bg-indigo-50 text-indigo-600',
+          keywords: ['مارکتینگ', 'کمپین', 'جذب', 'تبلیغات', 'رشد']
+        },
+        {
+          id: 'admin-operations-tab',
+          title: 'مدیریت عملیات و زنجیره تأمین',
+          subtitle: 'انبارداری، تجهیزات، شیفت‌ها و ظرفیت کلینیک‌ها',
+          path: '/admin/operations',
+          icon: <ShieldAlert className="w-4 h-4" />,
+          iconColor: 'bg-purple-50 text-purple-600',
+          keywords: ['عملیات', 'انبار', 'تجهیزات', 'زنجیره تامین']
+        },
+        {
+          id: 'admin-websites-tab',
+          title: 'پرتال‌ها و وب‌سایت‌های سازمانی',
+          subtitle: 'مدیریت پرتال‌ها، وبلاگ، خدمات و محتوای عمومی',
+          path: '/admin/websites',
+          icon: <Globe className="w-4 h-4" />,
+          iconColor: 'bg-cyan-50 text-cyan-600',
+          keywords: ['سایت', 'وبسایت', 'پرتال', 'محتوا', 'وبلاگ']
+        },
+        {
+          id: 'admin-analytics-tab',
+          title: 'هوش تجاری و آنالیتیکس پیشرفته (BI)',
+          subtitle: 'تحلیل داده‌های کلان، پیش‌بینی هوشمند و گزارش‌ساز',
+          path: '/admin/analytics',
+          icon: <PieChart className="w-4 h-4" />,
+          iconColor: 'bg-blue-50 text-blue-600',
+          keywords: ['آنالیتیکس', 'هوش تجاری', 'گزارش', 'bi', 'تحلیل']
+        }
+      ]
+    }] : []),
     ...(currentUser?.role === 'doctor' ? [{
       id: 'doctor-shortcuts',
       title: 'میزکار و پرتال بالینی پزشک',
@@ -188,7 +272,7 @@ export const MobileHamburgerDrawer: React.FC<MobileHamburgerDrawerProps> = ({
         }
       ]
     }] : []),
-    ...((currentUser?.role === 'clinic_manager' || currentUser?.role === 'branch_manager' || currentUser?.role === 'super_admin' || location.pathname.startsWith('/clinic')) ? [{
+    ...((currentUser?.role === 'clinic_manager' || currentUser?.role === 'branch_manager' || currentUser?.role === 'super_admin' || (location.pathname === '/clinic' || (location.pathname.startsWith('/clinic/') && !location.pathname.startsWith('/clinic-')))) ? [{
       id: 'clinic-shortcuts',
       title: 'مرکز عملیات و مدیریت همرا کلینیک',
       items: [

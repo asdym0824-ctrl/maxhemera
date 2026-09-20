@@ -7,6 +7,7 @@ import { DoctorCard } from '../components/doctors/DoctorCard';
 import { DoctorCompactCard } from '../components/doctors/DoctorCompactCard';
 import { DoctorFilterSidebar } from '../components/doctors/DoctorFilterSidebar';
 import { MobileSpecialtiesModal } from '../components/specialties/MobileSpecialtiesModal';
+import { IRAN_PROVINCES } from '../data/provinces';
 import { 
   Search, 
   SlidersHorizontal, 
@@ -17,7 +18,8 @@ import {
   ChevronDown, 
   CheckCircle2, 
   X,
-  Stethoscope
+  Stethoscope,
+  MapPin
 } from 'lucide-react';
 import { Button } from '../components/common/Button';
 import { MedicalLoadingIndicator } from '../components/common/MedicalLoadingIndicator';
@@ -39,6 +41,7 @@ export const DoctorSearchPage: React.FC<DoctorSearchPageProps> = ({
 
   const queryParamSearch = searchParams.get('search') || initialSearchQuery;
   const queryParamSpecialty = searchParams.get('specialtyId') || initialSpecialtyId;
+  const queryParamProvince = searchParams.get('province') || '';
   const queryParamInsurance = searchParams.get('insurance') || '';
   const queryParamBranch = searchParams.get('branchId') || '';
   const queryParamHasOnline = searchParams.get('hasOnline') === 'true';
@@ -54,6 +57,7 @@ export const DoctorSearchPage: React.FC<DoctorSearchPageProps> = ({
   // Filter states
   const [searchQuery, setSearchQuery] = useState(queryParamSearch);
   const [selectedSpecialtyId, setSelectedSpecialtyId] = useState(queryParamSpecialty);
+  const [selectedProvince, setSelectedProvince] = useState(queryParamProvince);
   const [hasOnlineConsultation, setHasOnlineConsultation] = useState(queryParamHasOnline);
   const [selectedGender, setSelectedGender] = useState<'all' | 'male' | 'female'>(queryParamGender);
   const [selectedInsurance, setSelectedInsurance] = useState(queryParamInsurance);
@@ -74,6 +78,7 @@ export const DoctorSearchPage: React.FC<DoctorSearchPageProps> = ({
     setVisibleDoctorsCount(6);
   }, [
     selectedSpecialtyId,
+    selectedProvince,
     searchQuery,
     hasOnlineConsultation,
     selectedGender,
@@ -94,6 +99,7 @@ export const DoctorSearchPage: React.FC<DoctorSearchPageProps> = ({
   useEffect(() => {
     if (queryParamSearch) setSearchQuery(queryParamSearch);
     if (queryParamSpecialty) setSelectedSpecialtyId(queryParamSpecialty);
+    if (queryParamProvince) setSelectedProvince(queryParamProvince);
     if (queryParamInsurance) setSelectedInsurance(queryParamInsurance);
     if (queryParamBranch) setSelectedBranchId(queryParamBranch);
     if (queryParamHasOnline) setHasOnlineConsultation(true);
@@ -104,6 +110,7 @@ export const DoctorSearchPage: React.FC<DoctorSearchPageProps> = ({
   }, [
     queryParamSearch,
     queryParamSpecialty,
+    queryParamProvince,
     queryParamInsurance,
     queryParamBranch,
     queryParamHasOnline,
@@ -122,6 +129,7 @@ export const DoctorSearchPage: React.FC<DoctorSearchPageProps> = ({
     apiService
       .getDoctors({
         specialtyId: selectedSpecialtyId || undefined,
+        province: selectedProvince || undefined,
         searchQuery: searchQuery || undefined,
         hasOnlineConsultation: hasOnlineConsultation || undefined,
         gender: selectedGender === 'all' ? undefined : selectedGender,
@@ -137,6 +145,7 @@ export const DoctorSearchPage: React.FC<DoctorSearchPageProps> = ({
       });
   }, [
     selectedSpecialtyId,
+    selectedProvince,
     searchQuery,
     hasOnlineConsultation,
     selectedGender,
@@ -148,15 +157,25 @@ export const DoctorSearchPage: React.FC<DoctorSearchPageProps> = ({
   ]);
 
   const handleSelectDoctor = (slug: string) => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     if (onSelectDoctor) {
       onSelectDoctor(slug);
     }
     navigate(`/doctors/${slug}`);
   };
 
+  const handleQuickBookDoctor = (slug: string) => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    if (onSelectDoctor) {
+      onSelectDoctor(slug);
+    }
+    navigate(`/doctors/${slug}?book=true`);
+  };
+
   const handleResetFilters = () => {
     setSearchQuery('');
     setSelectedSpecialtyId('');
+    setSelectedProvince('');
     setHasOnlineConsultation(false);
     setSelectedGender('all');
     setSelectedInsurance('');
@@ -237,6 +256,51 @@ export const DoctorSearchPage: React.FC<DoctorSearchPageProps> = ({
             <span>سایر ({specialties.length - 8})...</span>
           </button>
         </div>
+
+        {/* Province Quick Filter Row */}
+        <div className="flex items-center gap-1.5 pt-1 overflow-x-auto no-scrollbar -mx-2 px-2">
+          <span className="text-[11px] font-bold text-slate-300 shrink-0 flex items-center gap-1 ml-1">
+            <MapPin className="w-3 h-3 text-blue-400" />
+            استان:
+          </span>
+          <button
+            onClick={() => setSelectedProvince('')}
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-medium shrink-0 transition-all cursor-pointer ${
+              !selectedProvince
+                ? 'bg-blue-600 text-white shadow-xs font-bold'
+                : 'bg-white/10 text-white/80 hover:bg-white/20'
+            }`}
+          >
+            همه استان‌ها
+          </button>
+          {['استان تهران', 'استان البرز', 'استان اصفهان', 'استان خراسان رضوی', 'استان فارس', 'استان آذربایجان شرقی', 'استان خوزستان', 'استان مازندران'].map(p => (
+            <button
+              key={p}
+              onClick={() => setSelectedProvince(selectedProvince === p ? '' : p)}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-medium shrink-0 transition-all cursor-pointer ${
+                selectedProvince === p
+                  ? 'bg-blue-500 text-white font-bold shadow-xs ring-1 ring-white/50'
+                  : 'bg-white/10 text-white/80 hover:bg-white/20'
+              }`}
+            >
+              {p.replace('استان ', '')}
+            </button>
+          ))}
+          <div className="relative shrink-0">
+            <select
+              value={selectedProvince}
+              onChange={e => setSelectedProvince(e.target.value)}
+              className="bg-slate-800 text-white text-[11px] border border-white/20 rounded-lg px-2 py-1 outline-hidden cursor-pointer"
+            >
+              <option value="" className="bg-slate-900 text-white">انتخاب از ۲۸ استان...</option>
+              {IRAN_PROVINCES.map(p => (
+                <option key={p} value={p} className="bg-slate-900 text-white">
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
@@ -246,6 +310,8 @@ export const DoctorSearchPage: React.FC<DoctorSearchPageProps> = ({
             specialties={specialties}
             selectedSpecialtyId={selectedSpecialtyId}
             setSelectedSpecialtyId={setSelectedSpecialtyId}
+            selectedProvince={selectedProvince}
+            setSelectedProvince={setSelectedProvince}
             hasOnlineConsultation={hasOnlineConsultation}
             setHasOnlineConsultation={setHasOnlineConsultation}
             selectedGender={selectedGender}
@@ -265,6 +331,8 @@ export const DoctorSearchPage: React.FC<DoctorSearchPageProps> = ({
               specialties={specialties}
               selectedSpecialtyId={selectedSpecialtyId}
               setSelectedSpecialtyId={setSelectedSpecialtyId}
+              selectedProvince={selectedProvince}
+              setSelectedProvince={setSelectedProvince}
               hasOnlineConsultation={hasOnlineConsultation}
               setHasOnlineConsultation={setHasOnlineConsultation}
               selectedGender={selectedGender}
@@ -281,17 +349,28 @@ export const DoctorSearchPage: React.FC<DoctorSearchPageProps> = ({
         {/* Doctor Grid Results */}
         <div className="lg:col-span-3 space-y-4">
           <div className="flex items-center justify-between text-xs text-slate-500 font-medium pb-2 border-b border-slate-200/80">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span>
                 نمایش <strong className="text-slate-900 font-bold">{displayedDoctors.length}</strong> از <strong className="text-slate-900 font-bold">{doctors.length}</strong> پزشک متخصص
               </span>
               {selectedSpecialtyId && (
                 <button
                   onClick={() => setSelectedSpecialtyId('')}
-                  className="text-blue-600 hover:underline flex items-center gap-0.5 text-[11px]"
+                  className="text-blue-600 hover:underline flex items-center gap-0.5 text-[11px] cursor-pointer"
                 >
                   <X className="w-3 h-3" />
                   <span>تخصص انتخابی</span>
+                </button>
+              )}
+              {selectedProvince && (
+                <button
+                  onClick={() => setSelectedProvince('')}
+                  className="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-lg flex items-center gap-1 text-[11px] font-medium hover:bg-blue-100 cursor-pointer"
+                  title="حذف فیلتر استان"
+                >
+                  <MapPin className="w-3 h-3 text-blue-600" />
+                  <span>{selectedProvince}</span>
+                  <X className="w-3 h-3" />
                 </button>
               )}
             </div>
@@ -341,7 +420,7 @@ export const DoctorSearchPage: React.FC<DoctorSearchPageProps> = ({
                       key={doc.id}
                       doctor={doc}
                       onSelect={handleSelectDoctor}
-                      onQuickBook={() => handleSelectDoctor(doc.slug)}
+                      onQuickBook={() => handleQuickBookDoctor(doc.slug)}
                     />
                   ))}
                 </div>
@@ -352,7 +431,7 @@ export const DoctorSearchPage: React.FC<DoctorSearchPageProps> = ({
                       key={doc.id}
                       doctor={doc}
                       onSelect={handleSelectDoctor}
-                      onQuickBook={() => handleSelectDoctor(doc.slug)}
+                      onQuickBook={() => handleQuickBookDoctor(doc.slug)}
                     />
                   ))}
                 </div>
@@ -392,13 +471,45 @@ export const DoctorSearchPage: React.FC<DoctorSearchPageProps> = ({
               )}
             </>
           ) : (
-            <div className="bg-white rounded-2xl p-12 text-center border border-slate-200 space-y-3">
+            <div className="bg-white rounded-2xl p-8 sm:p-12 text-center border border-slate-200 space-y-4">
               <UserX className="w-12 h-12 text-slate-300 mx-auto" />
-              <h3 className="font-bold text-base text-slate-800">پزشکی با این مشخصات یافت نشد</h3>
-              <p className="text-xs text-slate-500">لطفاً عبارات جستجو یا فیلترهای انتخابی را تغییر دهید.</p>
-              <Button variant="outline" size="sm" onClick={handleResetFilters}>
-                پاک‌سازی همه فیلترها
-              </Button>
+              <div className="space-y-1">
+                <h3 className="font-bold text-base text-slate-800">
+                  {selectedProvince 
+                    ? `پزشکی در ${selectedProvince} با این شرایط یافت نشد`
+                    : 'پزشکی با این مشخصات یافت نشد'}
+                </h3>
+                <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                  {selectedProvince
+                    ? `می‌توانید فیلتر استان را حذف کنید تا پزشکان تمام کشور نمایش داده شوند، یا نوبت مشاوره آنلاین تصویری رزرو کنید.`
+                    : 'لطفاً عبارات جستجو یا فیلترهای انتخابی را تغییر دهید.'}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                {selectedProvince && (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setSelectedProvince('')}
+                    className="flex items-center gap-1.5"
+                  >
+                    <MapPin className="w-3.5 h-3.5 text-blue-600" />
+                    <span>حذف فیلتر {selectedProvince}</span>
+                  </Button>
+                )}
+                {!hasOnlineConsultation && (
+                  <Button 
+                    variant="primary" 
+                    size="sm" 
+                    onClick={() => setHasOnlineConsultation(true)}
+                  >
+                    مشاهده پزشکان مشاوره آنلاین تصویری
+                  </Button>
+                )}
+                <Button variant="ghost" size="sm" onClick={handleResetFilters}>
+                  پاک‌سازی همه فیلترها
+                </Button>
+              </div>
             </div>
           )}
         </div>

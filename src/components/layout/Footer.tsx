@@ -10,9 +10,10 @@ export const Footer: React.FC = () => {
   const { currentUser, isLoggedIn } = useAuth();
 
   const isStaffWorkspace = 
-    location.pathname.startsWith('/doctor') ||
+    (location.pathname === '/doctor' || (location.pathname.startsWith('/doctor/') && !location.pathname.startsWith('/doctors'))) ||
     location.pathname.startsWith('/secretary') ||
-    location.pathname.startsWith('/clinic') ||
+    location.pathname.startsWith('/reception') ||
+    (location.pathname === '/clinic' || (location.pathname.startsWith('/clinic/') && !location.pathname.startsWith('/clinic-'))) ||
     location.pathname.startsWith('/admin');
 
   // Minimal professional status footer for staff workspaces

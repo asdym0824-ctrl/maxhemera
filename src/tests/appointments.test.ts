@@ -8,6 +8,10 @@ describe('Appointment Status Lifecycle Transitions', () => {
     expect(canTransitionAppointment('scheduled', 'arrived')).toBe(true);
   });
 
+  it('scheduled -> in_visit is valid (direct call by doctor or online consultation)', () => {
+    expect(canTransitionAppointment('scheduled', 'in_visit')).toBe(true);
+  });
+
   it('arrived -> in_visit is valid', () => {
     expect(canTransitionAppointment('arrived', 'in_visit')).toBe(true);
   });

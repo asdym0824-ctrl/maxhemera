@@ -9,7 +9,7 @@ export function canTransitionAppointment(from: AppointmentStatus, to: Appointmen
 
   switch (from) {
     case 'scheduled':
-      return to === 'arrived' || to === 'canceled' || to === 'no_show';
+      return to === 'arrived' || to === 'in_visit' || to === 'canceled' || to === 'no_show';
 
     case 'arrived':
       return to === 'in_visit' || to === 'canceled' || to === 'no_show';

@@ -75,7 +75,9 @@ export const DoctorCard: React.FC<DoctorCardProps> = ({ doctor, onSelect, onQuic
               <MapPin className="w-3.5 h-3.5 text-blue-600 shrink-0" />
               مکان:
             </span>
-            <span className="font-medium text-slate-800 truncate text-left">{doctor.city} - {doctor.address.split('،')[0]}</span>
+            <span className="font-medium text-slate-800 truncate text-left">
+              {doctor.province ? `${doctor.province}، ${doctor.city}` : doctor.city} - {doctor.address.split('،')[0]}
+            </span>
           </div>
 
           <div className="flex items-center justify-between text-slate-600 gap-2">
@@ -111,14 +113,19 @@ export const DoctorCard: React.FC<DoctorCardProps> = ({ doctor, onSelect, onQuic
       <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
         <button
           type="button"
-          onClick={() => onSelect(doctor.slug)}
+          onClick={() => {
+            window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+            onSelect(doctor.slug);
+          }}
           className="min-h-[44px] px-3 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 active:scale-[0.98] transition-all flex items-center justify-center cursor-pointer"
         >
           رزومه و نظرات
         </button>
         <button
+          id={`doctor-quick-book-btn-${doctor.slug}`}
           type="button"
           onClick={() => {
+            window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
             if (onQuickBook) onQuickBook(doctor);
             else onSelect(doctor.slug);
           }}

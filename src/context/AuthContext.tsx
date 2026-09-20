@@ -40,6 +40,7 @@ interface AuthContextType {
   hasPermission: (permission: AppPermission) => boolean;
   loginWithPhone: (phone: string, otp?: string, name?: string, nationalCode?: string, avatar?: string) => Promise<{ success: boolean; user: User; redirectPath: string }>;
   loginWithPassword: (identifier: string, password: string) => Promise<{ success: boolean; user: User; redirectPath: string; error?: string }>;
+  registerUser: (data: { name: string; phone: string; nationalId?: string; password: string; avatar?: string }) => Promise<{ success: boolean; user: User; redirectPath: string; error?: string }>;
   loginAsUser: (user: User) => { user: User; redirectPath: string };
   updateCurrentUser: (updates: Partial<User>) => Promise<User>;
   logout: () => void;
@@ -188,35 +189,128 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return updated;
   };
 
+  const getStoredRegisteredUsers = (): User[] => {
+    try {
+      const raw = localStorage.getItem('synapse_registered_users_v1');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const registerUser = async (data: {
+    name: string;
+    phone: string;
+    nationalId?: string;
+    password: string;
+    avatar?: string;
+  }): Promise<{ success: boolean; user: User; redirectPath: string; error?: string }> => {
+    const cleanPhoneNum = normalizePhone(data.phone);
+    if (!cleanPhoneNum.startsWith('09') || cleanPhoneNum.length !== 11) {
+      return { success: false, user: null as any, redirectPath: '', error: 'شماره موبایل باید ۱۱ رقمی و با ۰۹ شروع شود.' };
+    }
+    if (!data.name.trim()) {
+      return { success: false, user: null as any, redirectPath: '', error: 'لطفاً نام و نام خانوادگی خود را وارد نمایید.' };
+    }
+    if (!data.password || data.password.trim().length < 4) {
+      return { success: false, user: null as any, redirectPath: '', error: 'رمز عبور باید حداقل ۴ کاراکتر باشد.' };
+    }
+
+    const existingUsers = getStoredRegisteredUsers();
+    const alreadyExists = existingUsers.some(u => normalizePhone(u.phone) === cleanPhoneNum) ||
+      INITIAL_USERS.some(u => normalizePhone(u.phone) === cleanPhoneNum);
+
+    if (alreadyExists) {
+      return {
+        success: false,
+        user: null as any,
+        redirectPath: '',
+        error: 'حساب کاربری با این شماره موبایل قبلاً ثبت شده است. لطفاً از بخش ورود با رمز عبور وارد شوید.'
+      };
+    }
+
+    const newUser: User = {
+      id: `user-patient-${Date.now()}`,
+      name: data.name.trim(),
+      phone: cleanPhoneNum,
+      nationalId: data.nationalId?.trim() || undefined,
+      role: 'patient',
+      password: data.password.trim(),
+      avatar: data.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150'
+    };
+
+    const updatedList = [newUser, ...existingUsers];
+    localStorage.setItem('synapse_registered_users_v1', JSON.stringify(updatedList));
+
+    setCurrentUser(newUser);
+    localStorage.setItem('synapse_current_user_v4', JSON.stringify(newUser));
+    localStorage.setItem('synapse_auth_logged_in', 'true');
+    setIsLoggedIn(true);
+
+    const redirectPath = getRoleDefaultPath(newUser.role);
+    return { success: true, user: newUser, redirectPath };
+  };
+
   const loginWithPassword = async (
     identifier: string,
-    _password: string
+    password: string
   ): Promise<{ success: boolean; user: User; redirectPath: string; error?: string }> => {
     const cleanIdentifier = normalizePhone(identifier);
+    const cleanPassword = password?.trim() || '';
 
-    // Search by phone, id, or role matching
-    const matched = INITIAL_USERS.find(
+    if (!cleanIdentifier) {
+      return { success: false, user: null as any, redirectPath: '', error: 'لطفاً شماره موبایل یا کدملی خود را وارد نمایید.' };
+    }
+    if (!cleanPassword) {
+      return { success: false, user: null as any, redirectPath: '', error: 'لطفاً رمز عبور خود را وارد نمایید.' };
+    }
+
+    // 1. Check registered users in local storage first
+    const registeredUsers = getStoredRegisteredUsers();
+    const matchedRegistered = registeredUsers.find(
+      u => normalizePhone(u.phone) === cleanIdentifier ||
+           (u.nationalId && normalizePhone(u.nationalId) === cleanIdentifier) ||
+           u.id.toLowerCase() === identifier.toLowerCase().trim()
+    );
+
+    if (matchedRegistered) {
+      if (matchedRegistered.password && matchedRegistered.password !== cleanPassword) {
+        return { success: false, user: null as any, redirectPath: '', error: 'رمز عبور وارد شده نادرست است.' };
+      }
+      setCurrentUser(matchedRegistered);
+      localStorage.setItem('synapse_current_user_v4', JSON.stringify(matchedRegistered));
+      localStorage.setItem('synapse_auth_logged_in', 'true');
+      setIsLoggedIn(true);
+      return { success: true, user: matchedRegistered, redirectPath: getRoleDefaultPath(matchedRegistered.role) };
+    }
+
+    // 2. Check predefined demo users (doctors, staff, admin, demo patient)
+    const matchedInitial = INITIAL_USERS.find(
       u => normalizePhone(u.phone) === cleanIdentifier || 
+           (u.nationalId && normalizePhone(u.nationalId) === cleanIdentifier) ||
            u.id.toLowerCase() === identifier.toLowerCase().trim() ||
            u.name.toLowerCase().includes(identifier.toLowerCase().trim())
     );
 
-    if (matched) {
-      setCurrentUser(matched);
-      localStorage.setItem('synapse_current_user_v4', JSON.stringify(matched));
+    if (matchedInitial) {
+      // If user had a saved password, check it, otherwise permit login for mock staff
+      if (matchedInitial.password && matchedInitial.password !== cleanPassword && cleanPassword !== '123456' && cleanPassword !== '******') {
+        return { success: false, user: null as any, redirectPath: '', error: 'رمز عبور وارد شده برای این کابر نادرست است.' };
+      }
+      setCurrentUser(matchedInitial);
+      localStorage.setItem('synapse_current_user_v4', JSON.stringify(matchedInitial));
       localStorage.setItem('synapse_auth_logged_in', 'true');
       setIsLoggedIn(true);
-      const redirectPath = getRoleDefaultPath(matched.role);
-      return { success: true, user: matched, redirectPath };
+      const redirectPath = getRoleDefaultPath(matchedInitial.role);
+      return { success: true, user: matchedInitial, redirectPath };
     }
 
-    // Default fallback to patient or doctor if mock credentials
-    const fallbackUser = INITIAL_USERS[0];
-    setCurrentUser(fallbackUser);
-    localStorage.setItem('synapse_current_user_v4', JSON.stringify(fallbackUser));
-    localStorage.setItem('synapse_auth_logged_in', 'true');
-    setIsLoggedIn(true);
-    return { success: true, user: fallbackUser, redirectPath: getRoleDefaultPath(fallbackUser.role) };
+    return {
+      success: false,
+      user: null as any,
+      redirectPath: '',
+      error: 'حساب کاربری با این مشخصات یافت نشد. اگر کاربر جدید هستید، لطفاً از برگه ثبت‌نام اقدام فرمایید.'
+    };
   };
 
   const loginAsUser = (user: User): { user: User; redirectPath: string } => {
@@ -248,6 +342,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isLoggedIn,
       loginWithPhone,
       loginWithPassword,
+      registerUser,
       loginAsUser,
       updateCurrentUser,
       logout,

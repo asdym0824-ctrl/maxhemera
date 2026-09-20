@@ -117,10 +117,19 @@ export const HomePage: React.FC<HomePageProps> = ({
   }, []);
 
   const handleSelectDoctor = (slug: string) => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     if (onSelectDoctor) {
       onSelectDoctor(slug);
     }
     navigate(`/doctors/${slug}`);
+  };
+
+  const handleQuickBookDoctor = (slug: string) => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    if (onSelectDoctor) {
+      onSelectDoctor(slug);
+    }
+    navigate(`/doctors/${slug}?book=true`);
   };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -1053,7 +1062,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                   key={doc.id}
                   doctor={doc}
                   onSelect={handleSelectDoctor}
-                  onQuickBook={() => handleSelectDoctor(doc.slug)}
+                  onQuickBook={() => handleQuickBookDoctor(doc.slug)}
                 />
               ))}
             </div>
@@ -1064,7 +1073,7 @@ export const HomePage: React.FC<HomePageProps> = ({
                   key={doc.id}
                   doctor={doc}
                   onSelect={handleSelectDoctor}
-                  onQuickBook={() => handleSelectDoctor(doc.slug)}
+                  onQuickBook={() => handleQuickBookDoctor(doc.slug)}
                 />
               ))}
             </div>

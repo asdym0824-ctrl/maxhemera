@@ -58,7 +58,7 @@ export const DoctorCompactCard: React.FC<DoctorCompactCardProps> = ({
               <span>نوبت: {doctor.nextAvailableSlot}</span>
             </span>
             <span className="hidden sm:inline truncate text-slate-400">
-              {doctor.city}
+              {doctor.province ? `${doctor.province} - ${doctor.city}` : doctor.city}
             </span>
           </div>
         </div>
@@ -70,6 +70,7 @@ export const DoctorCompactCard: React.FC<DoctorCompactCardProps> = ({
           type="button"
           onClick={(e) => {
             e.stopPropagation();
+            window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
             if (onQuickBook) {
               onQuickBook(doctor);
             } else {

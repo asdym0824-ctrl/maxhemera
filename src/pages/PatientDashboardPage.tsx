@@ -267,17 +267,7 @@ export const PatientDashboardPage: React.FC<{ onNavigateToDoctors: () => void }>
               )}
             </div>
 
-            {/* Quick Profile Health Stats */}
-            <div className="pt-3 border-t border-slate-100 grid grid-cols-2 gap-2 text-right text-[11px]">
-              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                <span className="text-slate-400 block text-[10px]">گروه خونی:</span>
-                <span className="font-bold text-slate-800 text-xs">O مثبت (O+)</span>
-              </div>
-              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                <span className="text-slate-400 block text-[10px]">حساسیت دارویی:</span>
-                <span className="font-bold text-rose-600 text-xs truncate block">پنی‌سیلین</span>
-              </div>
-            </div>
+
           </div>
 
           {/* Desktop Sidebar Nav */}

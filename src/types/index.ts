@@ -46,6 +46,7 @@ export interface User {
   name: string;
   phone: string;
   role: UserRole;
+  password?: string;
   avatar?: string;
   nationalId?: string;
   email?: string;
@@ -196,6 +197,7 @@ export interface Doctor {
   rating: number;
   reviewCount: number;
   experienceYears: number;
+  province?: string;
   city: string;
   address: string;
   bio: string;

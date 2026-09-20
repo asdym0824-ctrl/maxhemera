@@ -48,6 +48,7 @@ import { DEMO_MODE } from '../../config';
 import { NearestBranchModal } from '../branches/NearestBranchModal';
 import { InsuranceFinderModal } from '../insurance/InsuranceFinderModal';
 import { MobileHamburgerDrawer } from './MobileHamburgerDrawer';
+import { PanelDedicatedMobileDrawer, PanelType } from './PanelDedicatedMobileDrawer';
 import { apiService } from '../../services/apiService';
 import { INITIAL_USERS } from '../../data/mockData';
 
@@ -176,6 +177,25 @@ export const Header: React.FC<HeaderProps> = ({
   const isSecretary = isLoggedIn && (currentUser?.role === 'secretary' || currentUser?.role === 'reception' || currentUser?.role === 'nurse');
   const isClinicManager = isLoggedIn && (currentUser?.role === 'clinic_manager' || currentUser?.role === 'branch_manager');
   const isAdmin = isLoggedIn && (currentUser?.role === 'super_admin' || currentUser?.role === 'admin' || currentUser?.role === 'finance' || currentUser?.role === 'hr' || currentUser?.role === 'content_manager');
+
+  // Determine if currently browsing a dedicated workspace/panel
+  const isClinicPanel = location.pathname === '/clinic' || (location.pathname.startsWith('/clinic/') && !location.pathname.startsWith('/clinic-') && !location.pathname.startsWith('/clinics'));
+  const isDoctorPanel = location.pathname === '/doctor' || (location.pathname.startsWith('/doctor/') && !location.pathname.startsWith('/doctors') && !location.pathname.startsWith('/doctor-site'));
+  const isSecretaryPanel = location.pathname === '/secretary' || location.pathname.startsWith('/secretary/') || location.pathname === '/reception';
+  const isPatientPanel = location.pathname === '/patient' || location.pathname.startsWith('/patient/');
+  const isAdminPanel = location.pathname === '/admin' || location.pathname.startsWith('/admin/');
+
+  const activePanelType: PanelType | null = isAdminPanel
+    ? 'admin'
+    : isClinicPanel
+      ? 'clinic'
+      : isDoctorPanel
+        ? 'doctor'
+        : isSecretaryPanel
+          ? 'secretary'
+          : isPatientPanel
+            ? 'patient'
+            : null;
 
   const renderAvatarModal = () => (
     <>
@@ -1289,20 +1309,7 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
-          {/* Patient Portal Tab if patient is logged in */}
-          {isLoggedIn && currentUser && currentUser.role === 'patient' && (
-            <Link
-              to="/patient"
-              className={`px-3 py-2 rounded-xl text-sm font-bold transition-colors flex items-center gap-1.5 ${
-                location.pathname.startsWith('/patient')
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-blue-700 bg-blue-50 hover:bg-blue-100'
-              }`}
-            >
-              <UserIcon className="w-4 h-4" />
-              <span>پرونده من</span>
-            </Link>
-          )}
+
         </nav>
 
         {/* Actions & User Section */}
@@ -1459,13 +1466,22 @@ export const Header: React.FC<HeaderProps> = ({
         className="hidden"
       />
 
-      {/* Accessible Mobile Hamburger Drawer */}
-      <MobileHamburgerDrawer
-        isOpen={mobileMenuOpen}
-        onClose={() => setMobileMenuOpen(false)}
-        onOpenBookingModal={onOpenBookingModal}
-        onOpenAvatarModal={() => setIsAvatarModalOpen(true)}
-      />
+      {/* Mobile Drawer: Dedicated Workspace Drawer if inside a panel, otherwise general site drawer */}
+      {activePanelType ? (
+        <PanelDedicatedMobileDrawer
+          isOpen={mobileMenuOpen}
+          onClose={() => setMobileMenuOpen(false)}
+          panelType={activePanelType}
+          onOpenAvatarModal={() => setIsAvatarModalOpen(true)}
+        />
+      ) : (
+        <MobileHamburgerDrawer
+          isOpen={mobileMenuOpen}
+          onClose={() => setMobileMenuOpen(false)}
+          onOpenBookingModal={onOpenBookingModal}
+          onOpenAvatarModal={() => setIsAvatarModalOpen(true)}
+        />
+      )}
 
       {/* Profile Photo Upload / Edit Modal (Mobile & Desktop) */}
       <Modal

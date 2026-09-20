@@ -13,7 +13,11 @@ import {
   ExternalLink,
   CheckSquare,
   PlayCircle,
-  UserCheck
+  UserCheck,
+  Bell,
+  Calendar,
+  AlertCircle,
+  X
 } from 'lucide-react';
 import { Badge } from '../components/common/Badge';
 import { Button } from '../components/common/Button';
@@ -22,6 +26,7 @@ import { DoctorWebsiteManager } from '../components/doctorPortal/DoctorWebsiteMa
 import { SecretaryTaskCenter } from '../components/secretary/SecretaryTaskCenter';
 import { aiContextService } from '../services/aiContextService';
 import { askClinicOperationsAi } from '../services/aiService';
+import { isAppointmentToday, formatToPersianDate } from '../utils/dateUtils';
 import { Send, Bot, RefreshCw } from 'lucide-react';
 
 export const DoctorDashboardPage: React.FC = () => {
@@ -43,7 +48,10 @@ export const DoctorDashboardPage: React.FC = () => {
   const [allDoctors, setAllDoctors] = useState<Doctor[]>([]);
   const [doctor, setDoctor] = useState<Doctor | null>(null);
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>('');
+  const [allAppointments, setAllAppointments] = useState<Appointment[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [appointmentFilter, setAppointmentFilter] = useState<'today' | 'upcoming' | 'all'>('today');
+  const [latestIncomingAlert, setLatestIncomingAlert] = useState<Appointment | null>(null);
   const [tasks, setTasks] = useState<ClinicTask[]>([]);
   const [records, setRecords] = useState<MedicalRecord[]>([]);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
@@ -88,8 +96,14 @@ export const DoctorDashboardPage: React.FC = () => {
     const doc = await apiService.getDoctorById(activeDoctorId);
     if (doc) setDoctor(doc);
 
-    const docApps = await apiService.getTodayAppointmentsByDoctor(activeDoctorId);
-    setAppointments(docApps);
+    // Fetch all doctor appointments to guarantee upcoming and new reservations are visible
+    const docApps = await apiService.getAppointmentsByDoctor(activeDoctorId);
+    setAllAppointments(docApps);
+    
+    // Sort with latest on top
+    const sorted = [...docApps].sort((a, b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime());
+    const todayOnly = sorted.filter(isAppointmentToday);
+    setAppointments(todayOnly);
 
     const docTasks = await apiService.getTasks({ doctorId: activeDoctorId });
     setTasks(docTasks);
@@ -102,11 +116,25 @@ export const DoctorDashboardPage: React.FC = () => {
     const handleUpdate = () => {
       if (activeDoctorId) loadData();
     };
+
+    const handleNewBooking = (e: Event) => {
+      const ce = e as CustomEvent<{ appointment: Appointment }>;
+      if (ce.detail?.appointment) {
+        const newApp = ce.detail.appointment;
+        if (newApp.doctorId === activeDoctorId) {
+          setLatestIncomingAlert(newApp);
+          if (activeDoctorId) loadData();
+        }
+      }
+    };
+
     window.addEventListener('synapse_appointments_updated', handleUpdate);
+    window.addEventListener('synapse_new_appointment_alert', handleNewBooking);
     window.addEventListener('synapse_tasks_updated', handleUpdate);
 
     return () => {
       window.removeEventListener('synapse_appointments_updated', handleUpdate);
+      window.removeEventListener('synapse_new_appointment_alert', handleNewBooking);
       window.removeEventListener('synapse_tasks_updated', handleUpdate);
     };
   }, [activeDoctorId]);
@@ -148,10 +176,18 @@ export const DoctorDashboardPage: React.FC = () => {
     loadData();
   };
 
-  const currentVisit = appointments.find(a => a.status === 'in_visit');
-  const waitingPatients = appointments.filter(a => a.status === 'arrived');
-  const completedCount = appointments.filter(a => a.status === 'completed').length;
-  const nextInLine = waitingPatients[0] || appointments.find(a => a.status === 'scheduled');
+  const todayApps = allAppointments.filter(isAppointmentToday);
+  const upcomingApps = allAppointments.filter(a => !isAppointmentToday(a) && (a.status === 'scheduled' || a.status === 'arrived'));
+  const displayedAppointments = appointmentFilter === 'today'
+    ? todayApps
+    : appointmentFilter === 'upcoming'
+    ? upcomingApps
+    : allAppointments;
+
+  const currentVisit = todayApps.find(a => a.status === 'in_visit') || allAppointments.find(a => a.status === 'in_visit');
+  const waitingPatients = todayApps.filter(a => a.status === 'arrived');
+  const completedCount = todayApps.filter(a => a.status === 'completed').length;
+  const nextInLine = waitingPatients[0] || todayApps.find(a => a.status === 'scheduled') || upcomingApps[0];
 
   // Listen to mobile quick clinical action trigger
   useEffect(() => {
@@ -242,9 +278,14 @@ export const DoctorDashboardPage: React.FC = () => {
             </Link>
           )}
 
-          <div className="bg-slate-800 px-4 py-2 rounded-xl text-center border border-slate-700">
+          <div className="bg-slate-800 px-3.5 py-2 rounded-xl text-center border border-slate-700">
             <span className="text-slate-400 block text-[11px]">نوبت‌های امروز:</span>
-            <span className="font-extrabold text-sm sm:text-base text-white">{appointments.length} بیمار</span>
+            <span className="font-extrabold text-sm sm:text-base text-white">{todayApps.length} بیمار</span>
+          </div>
+
+          <div className="bg-slate-800 px-3.5 py-2 rounded-xl text-center border border-slate-700">
+            <span className="text-emerald-400 block text-[11px]">رزروهای آینده:</span>
+            <span className="font-extrabold text-sm sm:text-base text-emerald-300">{upcomingApps.length} بیمار</span>
           </div>
         </div>
       </div>
@@ -402,42 +443,45 @@ export const DoctorDashboardPage: React.FC = () => {
 
           {/* Active Patient Hero Card */}
           {currentVisit ? (
-            <div className="lg:col-span-3 bg-gradient-to-r from-purple-950 via-slate-900 to-indigo-950 text-white rounded-3xl p-6 shadow-xl border border-purple-500/30 space-y-4">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
+            <div className="lg:col-span-3 bg-gradient-to-r from-purple-950 via-slate-900 to-indigo-950 text-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-xl border border-purple-500/30 space-y-3 sm:space-y-4">
+              <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-2.5 sm:pb-3">
                 <div className="flex items-center gap-2 text-xs text-purple-300 font-bold">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-                  بیمار جاری در اتاق ویزیت (Active Patient)
+                  <span>بیمار جاری در اتاق ویزیت (Active Patient)</span>
                 </div>
                 <Badge variant="purple">در حال ویزیت</Badge>
               </div>
 
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <h3 className="text-xl font-bold text-white">{currentVisit.patientName}</h3>
+                <div className="space-y-1 w-full sm:w-auto">
+                  <h3 className="text-lg sm:text-xl font-bold text-white">{currentVisit.patientName}</h3>
                   <p className="text-xs text-slate-300">
                     ساعت نوبت: {currentVisit.timeSlot} | کد پیگیری: {currentVisit.trackingCode} | تلفن: {currentVisit.patientPhone}
                   </p>
                   {currentVisit.symptomsNote && (
-                    <p className="text-xs text-blue-200 pt-1">علت مراجعه: "{currentVisit.symptomsNote}"</p>
+                    <p className="text-xs text-blue-200 pt-0.5">علت مراجعه: "{currentVisit.symptomsNote}"</p>
                   )}
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="w-full sm:w-auto grid grid-cols-1 xs:grid-cols-2 sm:flex sm:items-center gap-2 pt-1 sm:pt-0">
                   <Button
                     variant="primary"
                     size="md"
+                    className="w-full sm:w-auto min-h-[44px] justify-center text-xs sm:text-sm font-bold px-3 sm:px-4"
                     onClick={() => handleOpenPatientRecord(currentVisit)}
-                    icon={<Sparkles className="w-4 h-4 text-amber-300" />}
+                    icon={<Sparkles className="w-4 h-4 text-amber-300 shrink-0" />}
                   >
-                    پرونده بالینی + هوش مصنوعی
+                    <span className="sm:hidden">پرونده بالینی و AI</span>
+                    <span className="hidden sm:inline">پرونده بالینی + هوش مصنوعی</span>
                   </Button>
                   <Button
                     variant="secondary"
                     size="md"
+                    className="w-full sm:w-auto min-h-[44px] justify-center text-xs sm:text-sm font-bold px-3 sm:px-4 border border-slate-700 hover:border-slate-600 shrink-0"
                     onClick={() => handleUpdateStatus(currentVisit.id, 'completed')}
-                    icon={<CheckCircle2 className="w-4 h-4 text-emerald-400" />}
+                    icon={<CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
                   >
-                    اتمام ویزیت
+                    <span>اتمام ویزیت</span>
                   </Button>
                 </div>
               </div>
@@ -466,54 +510,203 @@ export const DoctorDashboardPage: React.FC = () => {
 
           {/* Patients Queue List */}
           <div className="lg:col-span-3 space-y-4">
-            <h3 className="font-extrabold text-base text-slate-900">لیست نوبت‌های شیفت امروز</h3>
+            {/* Live New Incoming Booking Banner */}
+            {latestIncomingAlert && (
+              <div id="doctor-incoming-booking-banner" className="bg-gradient-to-r from-emerald-900 via-slate-900 to-emerald-950 text-white p-4 sm:p-5 rounded-3xl border border-emerald-500/40 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-3">
+                <div className="flex items-center gap-3.5">
+                  <div className="relative w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/40">
+                    <Bell className="w-6 h-6 animate-bounce" />
+                    <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full animate-ping" />
+                    <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-sm sm:text-base text-emerald-300">رزرو نوبت جدید ثبت شد! (هم‌اکنون)</span>
+                      <span className="text-[10px] bg-emerald-500 text-slate-950 font-black px-2 py-0.5 rounded-full">لحظه‌ای</span>
+                    </div>
+                    <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                      بیمار <strong>{latestIncomingAlert.patientName}</strong> نوبت {latestIncomingAlert.visitType === 'in_person' ? 'حضوری' : 'آنلاین'} برای تاریخ <strong className="text-emerald-200">{formatToPersianDate(latestIncomingAlert.date)}</strong> ساعت <strong className="text-emerald-200">{latestIncomingAlert.timeSlot}</strong> رزرو کرد.
+                      <span className="inline-block mr-2 font-mono text-[11px] text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded">
+                        کد رهگیری: {latestIncomingAlert.trackingCode}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAppointmentFilter(isAppointmentToday(latestIncomingAlert) ? 'today' : 'upcoming');
+                      handleOpenPatientRecord(latestIncomingAlert);
+                    }}
+                    className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-emerald-500/20 cursor-pointer"
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span>بررسی پرونده و جزئیات</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLatestIncomingAlert(null)}
+                    className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
+                    aria-label="بستن اعلان"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Filter Tabs & Header */}
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
+              <div className="flex items-center gap-2.5">
+                <Calendar className="w-5 h-5 text-blue-600" />
+                <div>
+                  <h3 className="font-extrabold text-sm sm:text-base text-slate-900">
+                    {appointmentFilter === 'today' 
+                      ? 'نوبت‌های شیفت امروز' 
+                      : appointmentFilter === 'upcoming' 
+                      ? 'نوبت‌های پیش‌رو و رزروهای آینده' 
+                      : 'تمام نوبت‌های ثبت‌شده در پرتال'}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    نمایش زنده نوبت‌های رزرو شده توسط بیماران همراه با کد رهگیری
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center bg-slate-100 p-1 rounded-xl text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setAppointmentFilter('today')}
+                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    appointmentFilter === 'today'
+                      ? 'bg-white text-blue-700 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  امروز ({todayApps.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAppointmentFilter('upcoming')}
+                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                    appointmentFilter === 'upcoming'
+                      ? 'bg-white text-emerald-700 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <span>رزروهای جدید و آینده ({upcomingApps.length})</span>
+                  {upcomingApps.length > 0 && (
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAppointmentFilter('all')}
+                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    appointmentFilter === 'all'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  همه ({allAppointments.length})
+                </button>
+              </div>
+            </div>
 
             <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs">
               <div className="divide-y divide-slate-100 text-xs">
-                {appointments.length === 0 ? (
-                  <div className="p-8 text-center text-slate-400">نوبتی برای شیفت امروز ثبت نشده است.</div>
+                {displayedAppointments.length === 0 ? (
+                  <div className="p-8 text-center text-slate-400 space-y-2">
+                    <Clock className="w-8 h-8 mx-auto text-slate-300" />
+                    <p>
+                      {appointmentFilter === 'today' 
+                        ? 'نوبتی برای شیفت امروز ثبت نشده است.' 
+                        : appointmentFilter === 'upcoming'
+                        ? 'نوبت رزرو شده‌ای برای روزهای آینده وجود ندارد.'
+                        : 'هیچ نوبتی ثبت نشده است.'}
+                    </p>
+                  </div>
                 ) : (
-                  appointments.map(app => (
-                    <div key={app.id} className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 hover:bg-slate-50 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-xl bg-slate-100 flex flex-col items-center justify-center font-bold text-slate-700">
-                          <Clock className="w-3.5 h-3.5 text-slate-400 mb-0.5" />
-                          <span className="text-[11px]">{app.timeSlot}</span>
-                        </div>
-                        <div>
-                          <div className="font-bold text-slate-900 text-sm">{app.patientName}</div>
-                          <div className="text-slate-500 text-[11px]">
-                            {app.visitType === 'in_person' ? 'ویزیت حضوری' : 'مشاوره آنلاین'} | کد پیگیری: {app.trackingCode}
+                  displayedAppointments.map(app => {
+                    const isNewArrival = latestIncomingAlert?.id === app.id;
+                    const isToday = isAppointmentToday(app);
+
+                    return (
+                      <div 
+                        key={app.id} 
+                        className={`p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-all ${
+                          isNewArrival 
+                            ? 'bg-emerald-50/60 ring-2 ring-emerald-500/40' 
+                            : 'hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-14 h-14 rounded-xl flex flex-col items-center justify-center font-bold shrink-0 ${
+                            isToday ? 'bg-blue-50 text-blue-800' : 'bg-slate-100 text-slate-700'
+                          }`}>
+                            <Clock className="w-3.5 h-3.5 mb-0.5 text-slate-400" />
+                            <span className="text-[11px] font-mono">{app.timeSlot}</span>
+                            <span className="text-[9px] font-medium text-slate-500">
+                              {isToday ? 'امروز' : formatToPersianDate(app.date).split(' ')[0]}
+                            </span>
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-900 text-sm">{app.patientName}</span>
+                              {isNewArrival && (
+                                <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-full border border-emerald-300">
+                                  رزرو جدید
+                                </span>
+                              )}
+                              {!isToday && (
+                                <span className="text-[10px] bg-amber-50 text-amber-800 font-bold px-1.5 py-0.5 rounded border border-amber-200">
+                                  {formatToPersianDate(app.date)}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-slate-500 text-[11px] mt-0.5 flex flex-wrap items-center gap-2">
+                              <span>{app.visitType === 'in_person' ? 'ویزیت حضوری' : 'مشاوره آنلاین'}</span>
+                              <span>•</span>
+                              <span>کد پیگیری: <strong className="font-mono text-slate-700">{app.trackingCode}</strong></span>
+                              {app.queuePosition && (
+                                <>
+                                  <span>•</span>
+                                  <span>نوبت صف #{app.queuePosition}</span>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      <div className="flex items-center gap-2">
-                        {app.status === 'arrived' && (
-                          <button
-                            onClick={() => handleUpdateStatus(app.id, 'in_visit')}
-                            className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                        <div className="flex items-center gap-2 self-end sm:self-center">
+                          {app.status === 'arrived' && (
+                            <button
+                              onClick={() => handleUpdateStatus(app.id, 'in_visit')}
+                              className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                            >
+                              <PlayCircle className="w-3.5 h-3.5" />
+                              فراخوانی
+                            </button>
+                          )}
+
+                          <Badge variant={app.status === 'completed' ? 'green' : app.status === 'in_visit' ? 'purple' : app.status === 'arrived' ? 'amber' : 'blue'}>
+                            {app.status === 'completed' ? 'ویزیت شده' : app.status === 'in_visit' ? 'در حال ویزیت' : app.status === 'arrived' ? 'در سالن انتظار' : 'رزرو شده'}
+                          </Badge>
+
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleOpenPatientRecord(app)}
+                            icon={<FileText className="w-3.5 h-3.5" />}
                           >
-                            <PlayCircle className="w-3.5 h-3.5" />
-                            فراخوانی
-                          </button>
-                        )}
-
-                        <Badge variant={app.status === 'completed' ? 'green' : app.status === 'in_visit' ? 'purple' : app.status === 'arrived' ? 'amber' : 'blue'}>
-                          {app.status === 'completed' ? 'ویزیت شده' : app.status === 'in_visit' ? 'در حال ویزیت' : app.status === 'arrived' ? 'در سالن انتظار' : 'رزرو شده'}
-                        </Badge>
-
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => handleOpenPatientRecord(app)}
-                          icon={<FileText className="w-3.5 h-3.5" />}
-                        >
-                          پرونده و هوش مصنوعی
-                        </Button>
+                            پرونده و هوش مصنوعی
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>

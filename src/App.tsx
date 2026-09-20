@@ -31,6 +31,7 @@ import { Doctor, Specialty, ServiceItem, HealthArticle } from './types';
 import { ArrowLeft, User } from 'lucide-react';
 import { MedicalLoadingIndicator } from './components/common/MedicalLoadingIndicator';
 import { ClinicalBackgroundGrid } from './components/common/medicalPattern/ClinicalBackgroundGrid';
+import { RealtimeAppointmentNotifier } from './components/common/RealtimeAppointmentNotifier';
 
 const RootRouteHandler: React.FC<{
   doctors: Doctor[];
@@ -108,10 +109,15 @@ const MainAppLayout: React.FC = () => {
     });
   }, []);
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [location.pathname]);
+
   const isStaffWorkspace = 
-    location.pathname.startsWith('/doctor') ||
+    (location.pathname === '/doctor' || (location.pathname.startsWith('/doctor/') && !location.pathname.startsWith('/doctors'))) ||
     location.pathname.startsWith('/secretary') ||
-    location.pathname.startsWith('/clinic') ||
+    location.pathname.startsWith('/reception') ||
+    (location.pathname === '/clinic' || (location.pathname.startsWith('/clinic/') && !location.pathname.startsWith('/clinic-'))) ||
     location.pathname.startsWith('/admin');
 
   return (
@@ -284,6 +290,9 @@ const MainAppLayout: React.FC = () => {
 
       {/* Persistent Mobile Bottom Navigation */}
       <MobileNavigation />
+
+      {/* Real-time Global Appointment Notifier */}
+      <RealtimeAppointmentNotifier />
     </div>
   );
 };

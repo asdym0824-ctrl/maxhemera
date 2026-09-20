@@ -9,7 +9,9 @@ import {
   Activity, 
   Layers,
   Building2,
-  MessageSquare
+  MessageSquare,
+  Bell,
+  X
 } from 'lucide-react';
 import { Appointment, ClinicTask, Doctor, ActivityLog } from '../types';
 import { apiService } from '../services/apiService';
@@ -68,14 +70,11 @@ export const SecretaryWorkspacePage: React.FC = () => {
     };
   }, []);
 
-  const clinicId = currentUser.clinicId;
-  const branchId = currentUser.branchId;
+  const clinicId = currentUser.clinicId || 'clinic-1';
+  const branchId = currentUser.branchId || 'branch-1';
+  const [latestIncomingAlert, setLatestIncomingAlert] = useState<Appointment | null>(null);
 
   const loadData = async () => {
-    if (!clinicId) {
-      setLoading(false);
-      return;
-    }
     setLoading(true);
     try {
       const [apps, tsks, docs, logs, ov] = await Promise.all([
@@ -98,20 +97,26 @@ export const SecretaryWorkspacePage: React.FC = () => {
   };
 
   useEffect(() => {
-    if (clinicId) {
-      loadData();
-    } else {
-      setLoading(false);
-    }
+    loadData();
 
     // Listen to reactive updates
     const handleUpdate = () => loadData();
+    const handleNewBooking = (e: Event) => {
+      const ce = e as CustomEvent<{ appointment: Appointment }>;
+      if (ce.detail?.appointment) {
+        setLatestIncomingAlert(ce.detail.appointment);
+        loadData();
+      }
+    };
+
     window.addEventListener('synapse_appointments_updated', handleUpdate);
+    window.addEventListener('synapse_new_appointment_alert', handleNewBooking);
     window.addEventListener('synapse_tasks_updated', handleUpdate);
     window.addEventListener('synapse_activity_updated', handleUpdate);
 
     return () => {
       window.removeEventListener('synapse_appointments_updated', handleUpdate);
+      window.removeEventListener('synapse_new_appointment_alert', handleNewBooking);
       window.removeEventListener('synapse_tasks_updated', handleUpdate);
       window.removeEventListener('synapse_activity_updated', handleUpdate);
     };
@@ -245,6 +250,63 @@ export const SecretaryWorkspacePage: React.FC = () => {
           </Button>
         </div>
       </div>
+
+      {/* Real-time Incoming Booking Alert for Receptionist */}
+      {latestIncomingAlert && (
+        <div id="secretary-live-booking-alert" className="bg-gradient-to-r from-indigo-900 via-slate-900 to-indigo-950 text-white p-4 sm:p-5 rounded-3xl border border-indigo-500/40 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-3">
+          <div className="flex items-center gap-3.5">
+            <div className="relative w-12 h-12 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 border border-indigo-500/40">
+              <Bell className="w-6 h-6 animate-bounce text-indigo-300" />
+              <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full animate-ping" />
+              <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-extrabold text-sm sm:text-base text-indigo-200">رزرو نوبت جدید اینترنتی توسط بیمار</span>
+                <span className="text-[10px] bg-emerald-500 text-slate-950 font-black px-2 py-0.5 rounded-full">دریافت شد</span>
+              </div>
+              <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                بیمار <strong className="text-white">{latestIncomingAlert.patientName}</strong> ({latestIncomingAlert.patientPhone}) نوبت {latestIncomingAlert.visitType === 'in_person' ? 'حضوری' : 'آنلاین'} برای <strong>دکتر {latestIncomingAlert.doctorName}</strong> رزرو کرد.
+                <span className="inline-block mr-2 font-mono text-[11px] text-indigo-300 bg-indigo-950/70 px-2 py-0.5 rounded border border-indigo-700/50">
+                  تاریخ: {latestIncomingAlert.date} | ساعت: {latestIncomingAlert.timeSlot} | رهگیری: {latestIncomingAlert.trackingCode}
+                </span>
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedAppointmentForSms(latestIncomingAlert);
+                setSmsModalOpen(true);
+              }}
+              className="px-3.5 py-2 bg-indigo-500 hover:bg-indigo-400 active:scale-95 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-indigo-500/20"
+            >
+              <MessageSquare className="w-4 h-4" />
+              <span>ارسال پیامک تایید</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                handleCreateTaskForPatient(latestIncomingAlert);
+              }}
+              className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <CheckSquare className="w-4 h-4" />
+              <span>وظیفه پیگیری منشی</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setLatestIncomingAlert(null)}
+              className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
+              aria-label="بستن"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* KPI Highlight Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">

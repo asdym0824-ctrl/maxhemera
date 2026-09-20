@@ -40,7 +40,8 @@ import {
   Info,
   Calendar,
   CreditCard,
-  UserCheck
+  UserCheck,
+  UserPlus
 } from 'lucide-react';
 import { Button } from '../components/common/Button';
 import { Badge } from '../components/common/Badge';
@@ -50,10 +51,10 @@ import { formatToPersianDate } from '../utils/dateUtils';
 import { INITIAL_USERS, MOCK_DOCTORS } from '../data/mockData';
 import { User, UserRole } from '../types';
 
-type LoginTab = 'otp' | 'password' | 'roles';
+type LoginTab = 'password' | 'register' | 'roles';
 
 export const LoginPage: React.FC<{ onSuccess?: (user: User) => void }> = ({ onSuccess }) => {
-  const { loginWithPhone, loginWithPassword, loginAsUser, getRoleDefaultPath, isLoggedIn, currentUser } = useAuth();
+  const { loginWithPassword, registerUser, loginAsUser, getRoleDefaultPath, isLoggedIn, currentUser } = useAuth();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   
@@ -62,86 +63,31 @@ export const LoginPage: React.FC<{ onSuccess?: (user: User) => void }> = ({ onSu
   const effectiveReturnUrl = returnUrl || pendingIntent?.returnUrl;
   const isFromDoctorSite = effectiveReturnUrl && (effectiveReturnUrl.startsWith('/site/') || effectiveReturnUrl.startsWith('/dr/') || effectiveReturnUrl.startsWith('/doctor/'));
 
-  // Active Login Mode Tab
-  const [activeTab, setActiveTab] = useState<LoginTab>('otp');
+  // Active Login Mode Tab: default to password login
+  const [activeTab, setActiveTab] = useState<LoginTab>('password');
 
   // Selected Portal Category for Tab 3
   const [selectedPortalCategory, setSelectedPortalCategory] = useState<'all' | 'patient' | 'doctor' | 'staff'>('all');
 
-  // OTP State
-  const [phone, setPhone] = useState('09121112233');
-  const [nationalCode, setNationalCode] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [avatarUrl, setAvatarUrl] = useState<string>('');
-  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
-  const [isNewPatient, setIsNewPatient] = useState(false);
-  const [otp, setOtp] = useState('');
-  const [otpStep, setOtpStep] = useState<'phone' | 'verify'>('phone');
-  const [resendTimer, setResendTimer] = useState(119);
-  const [canResend, setCanResend] = useState(false);
-  const photoInputRef = useRef<HTMLInputElement>(null);
-
-  const registrationPresets = [
-    'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150',
-    'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150',
-    'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&q=80&w=150',
-    'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=150',
-    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150'
-  ];
-
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      setErrorMessage('لطفاً یک فایل تصویری معتبر (JPG، PNG، WebP) انتخاب فرمایید.');
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      setErrorMessage('حداکثر حجم تصویر ۵ مگابایت است.');
-      return;
-    }
-
-    setIsUploadingPhoto(true);
-    const reader = new FileReader();
-    reader.onload = () => {
-      setAvatarUrl(reader.result as string);
-      setIsUploadingPhoto(false);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  // Password / Medical Staff State
-  const [staffIdentifier, setStaffIdentifier] = useState('09123334455');
-  const [staffPassword, setStaffPassword] = useState('******');
+  // Login Form State
+  const [loginIdentifier, setLoginIdentifier] = useState('09121112233');
+  const [loginPassword, setLoginPassword] = useState('123456');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [showForgotHelp, setShowForgotHelp] = useState(false);
+
+  // Register Form State (for new users who set up their password)
+  const [regFullName, setRegFullName] = useState('');
+  const [regPhone, setRegPhone] = useState('');
+  const [regNationalCode, setRegNationalCode] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regConfirmPassword, setRegConfirmPassword] = useState('');
+  const [showRegPassword, setShowRegPassword] = useState(false);
 
   // General Form States
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-
-  // Resend Timer logic
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (otpStep === 'verify' && resendTimer > 0) {
-      interval = setInterval(() => {
-        setResendTimer(prev => {
-          if (prev <= 1) {
-            setCanResend(true);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [otpStep, resendTimer]);
 
   // Clean phone helper
   const cleanPhone = (p: string) => {
@@ -153,82 +99,32 @@ export const LoginPage: React.FC<{ onSuccess?: (user: User) => void }> = ({ onSu
       .trim();
   };
 
-  // Identify user in real-time as phone number is typed
-  const detectedUser = INITIAL_USERS.find(u => cleanPhone(u.phone) === cleanPhone(phone));
-
-  const formatTimer = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-  };
-
-  const handleSendOtp = (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage(null);
-
-    const normalized = cleanPhone(phone);
-    if (!normalized.startsWith('09') || normalized.length !== 11) {
-      setErrorMessage('لطفاً یک شماره همراه معتبر ۱۱ رقمی (شروع با ۰۹) وارد فرمایید.');
-      return;
-    }
-
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      setOtpStep('verify');
-      setResendTimer(119);
-      setCanResend(false);
-      setOtp('123456'); // friendly auto-fill demo OTP
-      setSuccessMessage('کد تأیید ۶ رقمی به شماره همراه شما پیامک شد.');
-    }, 400);
-  };
-
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage(null);
-
-    if (otp.length < 5) {
-      setErrorMessage('لطفاً کد تأیید ۶ رقمی را به صورت کامل وارد نمایید.');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const result = await loginWithPhone(phone, otp, fullName, nationalCode, avatarUrl || undefined);
-      setIsLoading(false);
-      setSuccessMessage(`خوش آمدید ${result.user.name}`);
-
-      setTimeout(() => {
-        if (effectiveReturnUrl) {
-          navigate(effectiveReturnUrl, { replace: true });
-        } else if (onSuccess) {
-          onSuccess(result.user);
-        } else {
-          navigate(result.redirectPath, { replace: true });
-        }
-      }, 300);
-    } catch {
-      setIsLoading(false);
-      setErrorMessage('خطا در احراز هویت. لطفاً مجدداً تلاش نمایید.');
-    }
-  };
+  // Real-time detected user for quick hints
+  const detectedUser = INITIAL_USERS.find(u => cleanPhone(u.phone) === cleanPhone(loginIdentifier) || u.id === loginIdentifier);
 
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
+    setSuccessMessage(null);
 
-    if (!staffIdentifier.trim()) {
-      setErrorMessage('لطفاً کد نظام پزشکی، شماره همراه یا نام کاربری سازمانی را وارد نمایید.');
+    const cleanId = loginIdentifier.trim();
+    if (!cleanId) {
+      setErrorMessage('لطفاً شماره همراه یا کد ملی خود را وارد نمایید.');
+      return;
+    }
+
+    if (!loginPassword.trim()) {
+      setErrorMessage('لطفاً رمز عبور خود را وارد نمایید.');
       return;
     }
 
     setIsLoading(true);
     try {
-      const result = await loginWithPassword(staffIdentifier, staffPassword);
+      const result = await loginWithPassword(cleanId, loginPassword);
       setIsLoading(false);
 
       if (result.success) {
-        setSuccessMessage(`احراز هویت موفق: خوش آمدید ${result.user.name}`);
+        setSuccessMessage(`ورود موفق: خوش آمدید ${result.user.name}`);
         setTimeout(() => {
           if (effectiveReturnUrl) {
             navigate(effectiveReturnUrl, { replace: true });
@@ -247,6 +143,62 @@ export const LoginPage: React.FC<{ onSuccess?: (user: User) => void }> = ({ onSu
     }
   };
 
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    if (!regFullName.trim()) {
+      setErrorMessage('لطفاً نام و نام خانوادگی خود را وارد نمایید.');
+      return;
+    }
+
+    const cleanNumber = cleanPhone(regPhone);
+    if (!cleanNumber.startsWith('09') || cleanNumber.length !== 11) {
+      setErrorMessage('شماره همراه باید ۱۱ رقم و با ۰۹ شروع شود.');
+      return;
+    }
+
+    if (!regPassword || regPassword.trim().length < 4) {
+      setErrorMessage('رمز عبور باید حداقل ۴ کاراکتر باشد.');
+      return;
+    }
+
+    if (regPassword !== regConfirmPassword) {
+      setErrorMessage('تکرار رمز عبور با رمز عبور انتخابی مطابقت ندارد.');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const result = await registerUser({
+        name: regFullName.trim(),
+        phone: cleanNumber,
+        nationalId: regNationalCode.trim() || undefined,
+        password: regPassword.trim()
+      });
+      setIsLoading(false);
+
+      if (result.success) {
+        setSuccessMessage(`حساب کاربری شما با موفقیت ایجاد شد: خوش آمدید ${result.user.name}`);
+        setTimeout(() => {
+          if (effectiveReturnUrl) {
+            navigate(effectiveReturnUrl, { replace: true });
+          } else if (onSuccess) {
+            onSuccess(result.user);
+          } else {
+            navigate(result.redirectPath, { replace: true });
+          }
+        }, 300);
+      } else {
+        setErrorMessage(result.error || 'خطا در ثبت‌نام حساب کاربری.');
+      }
+    } catch {
+      setIsLoading(false);
+      setErrorMessage('خطا در ایجاد حساب کاربری.');
+    }
+  };
+
   const handleQuickLogin = (user: User) => {
     const result = loginAsUser(user);
     if (effectiveReturnUrl) {
@@ -256,14 +208,6 @@ export const LoginPage: React.FC<{ onSuccess?: (user: User) => void }> = ({ onSu
     } else {
       navigate(result.redirectPath, { replace: true });
     }
-  };
-
-  const handleResendCode = () => {
-    if (!canResend) return;
-    setResendTimer(119);
-    setCanResend(false);
-    setOtp('123456');
-    setSuccessMessage('کد تأیید جدید مجدداً ارسال گردید.');
   };
 
   // Group demo users by categories
@@ -389,38 +333,40 @@ export const LoginPage: React.FC<{ onSuccess?: (user: User) => void }> = ({ onSu
             <button
               type="button"
               onClick={() => {
-                setActiveTab('otp');
+                setActiveTab('password');
                 setErrorMessage(null);
+                setSuccessMessage(null);
               }}
               className={`py-2 sm:py-3 px-1 sm:px-2 rounded-lg sm:rounded-xl transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer text-center ${
-                activeTab === 'otp'
+                activeTab === 'password'
                   ? 'bg-white text-blue-700 shadow-sm ring-1 ring-slate-200'
                   : 'hover:text-slate-900 hover:bg-white/50'
               }`}
             >
-              <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600 shrink-0" />
+              <Lock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600 shrink-0" />
               <span className="text-[10px] sm:text-xs leading-tight">
-                <span className="sm:hidden">پیامک OTP</span>
-                <span className="hidden sm:inline">ورود مراجعین (پیامک OTP)</span>
+                <span className="sm:hidden">ورود با رمز</span>
+                <span className="hidden sm:inline">ورود با رمز عبور</span>
               </span>
             </button>
 
             <button
               type="button"
               onClick={() => {
-                setActiveTab('password');
+                setActiveTab('register');
                 setErrorMessage(null);
+                setSuccessMessage(null);
               }}
               className={`py-2 sm:py-3 px-1 sm:px-2 rounded-lg sm:rounded-xl transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer text-center ${
-                activeTab === 'password'
-                  ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-slate-200'
+                activeTab === 'register'
+                  ? 'bg-white text-emerald-700 shadow-sm ring-1 ring-slate-200'
                   : 'hover:text-slate-900 hover:bg-white/50'
               }`}
             >
-              <Stethoscope className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-600 shrink-0" />
+              <UserPlus className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 shrink-0" />
               <span className="text-[10px] sm:text-xs leading-tight">
-                <span className="sm:hidden">کادر درمان</span>
-                <span className="hidden sm:inline">کادر درمان و پزشکان</span>
+                <span className="sm:hidden">ثبت‌نام جدید</span>
+                <span className="hidden sm:inline">ثبت‌نام کاربر جدید</span>
               </span>
             </button>
 
@@ -429,6 +375,7 @@ export const LoginPage: React.FC<{ onSuccess?: (user: User) => void }> = ({ onSu
               onClick={() => {
                 setActiveTab('roles');
                 setErrorMessage(null);
+                setSuccessMessage(null);
               }}
               className={`py-2 sm:py-3 px-1 sm:px-2 rounded-lg sm:rounded-xl transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer text-center ${
                 activeTab === 'roles'
@@ -465,359 +412,89 @@ export const LoginPage: React.FC<{ onSuccess?: (user: User) => void }> = ({ onSu
           )}
 
           {/* ==================================================== */}
-          {/* TAB 1: OTP PHONE LOGIN / REGISTRATION */}
-          {/* ==================================================== */}
-          {activeTab === 'otp' && (
-            <div className="max-w-md mx-auto">
-              {otpStep === 'phone' ? (
-                <form onSubmit={handleSendOtp} className="space-y-3.5 sm:space-y-4">
-                  <div className="bg-blue-50/60 border border-blue-100 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 text-xs text-blue-900 flex items-start gap-2 sm:gap-2.5">
-                    <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-                    <p className="leading-relaxed text-[11px] sm:text-xs">
-                      شماره تلفن همراه خود را وارد کنید. کد احراز هویت پیامکی به سرعت برای شما ارسال خواهد شد.
-                    </p>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <label className="font-bold text-xs text-slate-700">شماره تلفن همراه:</label>
-                      <span className="text-[10px] sm:text-[11px] text-slate-400">فرمت: ۰۹۱۲۳۴۵۶۷۸۹</span>
-                    </div>
-                    <div className="flex items-center bg-slate-50 border border-slate-200 focus-within:border-blue-500 focus-within:bg-white focus-within:ring-3 focus-within:ring-blue-500/10 rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 transition-all">
-                      <Phone className="w-4 h-4 text-slate-400 ml-2.5 shrink-0" />
-                      <input
-                        type="tel"
-                        required
-                        value={phone}
-                        onChange={e => setPhone(e.target.value)}
-                        placeholder="۰۹۱۲۳۴۵۶۷۸۹"
-                        className="w-full bg-transparent outline-hidden font-mono font-bold text-slate-900 text-sm tracking-wider"
-                        dir="ltr"
-                        autoFocus
-                      />
-                    </div>
-                  </div>
-
-                  {/* Real-time Phone Recognition Card */}
-                  {detectedUser ? (
-                    <div className="p-2.5 sm:p-3.5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl sm:rounded-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 text-xs animate-in fade-in shadow-2xs">
-                      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-                        <img
-                          src={detectedUser.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100"}
-                          alt={detectedUser.name}
-                          className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border-2 border-blue-400 shrink-0"
-                        />
-                        <div className="min-w-0">
-                          <div className="font-bold text-blue-950 text-xs sm:text-sm flex items-center gap-1.5 truncate">
-                            <span>{detectedUser.name}</span>
-                            <BadgeCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600 shrink-0" />
-                          </div>
-                          <div className="text-[10px] sm:text-[11px] text-blue-700 font-medium mt-0.5 truncate">
-                            نقش: {detectedUser.role === 'doctor' ? 'پزشک متخصص کلینیک' : detectedUser.role === 'secretary' ? 'منشی و پذیرش' : detectedUser.role === 'clinic_manager' ? 'مدیریت کلینیک' : detectedUser.role === 'super_admin' ? 'مدیریت ارشد' : 'بیمار ثبت‌شده'}
-                          </div>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleQuickLogin(detectedUser)}
-                        className="text-xs font-bold text-blue-700 bg-white hover:bg-blue-600 hover:text-white px-3 py-1.5 sm:py-2 rounded-xl border border-blue-200 transition-all shrink-0 cursor-pointer shadow-2xs text-center"
-                      >
-                        ورود فوری
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="pt-1">
-                      <button
-                        type="button"
-                        onClick={() => setIsNewPatient(!isNewPatient)}
-                        className="text-xs text-blue-600 hover:text-blue-700 font-bold inline-flex items-center gap-1.5 cursor-pointer py-1"
-                      >
-                        <span>{isNewPatient ? '− انصراف از تکمیل مشخصات ثبت‌نام' : '+ مراجعه‌کننده جدید هستید؟ (ثبت مشخصات اولیه)'}</span>
-                      </button>
-
-                      {isNewPatient && (
-                        <div className="mt-2.5 sm:mt-3 p-3 sm:p-4 bg-slate-50 border border-slate-200 rounded-xl sm:rounded-2xl space-y-3 sm:space-y-4 animate-in fade-in">
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-700">نام و نام خانوادگی:</label>
-                            <input
-                              type="text"
-                              value={fullName}
-                              onChange={e => setFullName(e.target.value)}
-                              placeholder="مثال: سارا رضایی"
-                              className="w-full bg-white border border-slate-200 focus:border-blue-500 rounded-xl px-3 sm:px-3.5 py-2 sm:py-2.5 text-xs text-slate-800 outline-hidden"
-                            />
-                          </div>
-                          
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-700">کد ملی ۱۰ رقمی (جهت استعلام بیمه):</label>
-                            <input
-                              type="text"
-                              maxLength={10}
-                              value={nationalCode}
-                              onChange={e => setNationalCode(e.target.value)}
-                              placeholder="۰۰۱۲۳۴۵۶۷۸"
-                              className="w-full bg-white border border-slate-200 focus:border-blue-500 rounded-xl px-3 sm:px-3.5 py-2 sm:py-2.5 text-xs font-mono text-slate-800 outline-hidden tracking-widest"
-                              dir="ltr"
-                            />
-                          </div>
-
-                          {/* Profile Avatar Upload */}
-                          <div className="space-y-2 pt-2 border-t border-slate-200/80">
-                            <div className="flex items-center justify-between">
-                              <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                                <Camera className="w-3.5 h-3.5 text-blue-600" />
-                                تصویر پروفایل در پرونده:
-                              </label>
-                              <span className="text-[10px] text-slate-400">اختیاری</span>
-                            </div>
-
-                            <div className="flex items-center gap-3">
-                              {/* Avatar Preview */}
-                              <div className="relative shrink-0">
-                                <img
-                                  src={avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150'}
-                                  alt="پیش‌نمایش پروفایل"
-                                  className="w-11 h-11 sm:w-12 sm:h-12 rounded-full object-cover border-2 border-blue-500 shadow-xs bg-white"
-                                />
-                                {avatarUrl && (
-                                  <button
-                                    type="button"
-                                    onClick={() => setAvatarUrl('')}
-                                    title="حذف تصویر"
-                                    className="absolute -top-1 -right-1 w-4 h-4 bg-rose-600 text-white rounded-full flex items-center justify-center text-[9px] hover:bg-rose-700 cursor-pointer shadow-xs"
-                                  >
-                                    <X className="w-2.5 h-2.5" />
-                                  </button>
-                                )}
-                              </div>
-
-                              {/* Upload Trigger Button & File Input */}
-                              <div className="flex-1 min-w-0">
-                                <button
-                                  type="button"
-                                  onClick={() => photoInputRef.current?.click()}
-                                  className="w-full py-2 px-3 border border-dashed border-blue-300 hover:border-blue-500 bg-blue-50/50 hover:bg-blue-50 text-blue-700 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                                >
-                                  <Upload className="w-3.5 h-3.5" />
-                                  <span>{avatarUrl ? 'تغییر تصویر انتخابی' : 'بارگذاری عکس از دستگاه'}</span>
-                                </button>
-                                <input
-                                  type="file"
-                                  ref={photoInputRef}
-                                  onChange={handlePhotoUpload}
-                                  accept="image/*"
-                                  className="hidden"
-                                />
-                              </div>
-                            </div>
-
-                            {/* Preset Avatars for Fast Selection */}
-                            <div className="pt-1.5">
-                              <span className="text-[10px] text-slate-500 block mb-1.5">یا انتخاب آواتار پیش‌فرض:</span>
-                              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-                                {registrationPresets.map((preset, idx) => (
-                                  <button
-                                    key={idx}
-                                    type="button"
-                                    onClick={() => setAvatarUrl(preset)}
-                                    className={`relative rounded-full p-0.5 border-2 transition-all hover:scale-105 cursor-pointer shrink-0 ${
-                                      avatarUrl === preset ? 'border-blue-600 ring-2 ring-blue-600/30' : 'border-transparent'
-                                    }`}
-                                  >
-                                    <img
-                                      src={preset}
-                                      alt={`آواتار ${idx + 1}`}
-                                      className="w-7 h-7 rounded-full object-cover"
-                                    />
-                                    {avatarUrl === preset && (
-                                      <span className="absolute -top-0.5 -right-0.5 bg-blue-600 text-white rounded-full p-0.5">
-                                        <Check className="w-2 h-2" />
-                                      </span>
-                                    )}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <Button
-                    variant="primary"
-                    size="lg"
-                    className="w-full py-3 sm:py-3.5 rounded-xl font-bold text-xs sm:text-sm shadow-md shadow-blue-600/20 cursor-pointer"
-                    isLoading={isLoading}
-                    type="submit"
-                    icon={<ArrowLeft className="w-4 h-4" />}
-                  >
-                    دریافت کد تأیید پیامکی
-                  </Button>
-
-                  {/* Fast Test Shortcut for demo testing */}
-                  <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 text-[11px] text-slate-500">
-                    <span>شماره تستی بیمار کلینیک:</span>
-                    <button
-                      type="button"
-                      onClick={() => setPhone('09121112233')}
-                      className="text-blue-600 hover:text-blue-800 font-mono font-bold hover:underline cursor-pointer text-xs"
-                    >
-                      ۰۹۱۲۱۱۱۲۲۳۳ (امیرحسین رضایی)
-                    </button>
-                  </div>
-
-                  <p className="text-[10px] sm:text-[11px] text-slate-400 text-center leading-relaxed pt-1">
-                    با ورود، شرایط و حریم خصوصی سامانه پرونده الکترونیک همرا کلینیک را می‌پذیرید.
-                  </p>
-                </form>
-              ) : (
-                <form onSubmit={handleVerifyOtp} className="space-y-4 sm:space-y-5">
-                  <div className="bg-gradient-to-br from-blue-50 to-sky-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-blue-100 text-blue-950 text-center space-y-2">
-                    <p className="text-xs">
-                      کد تأیید ۶ رقمی به شماره <strong>{phone}</strong> ارسال گردید.
-                    </p>
-                    <div className="inline-flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 text-xs text-blue-800 font-bold bg-white px-2.5 sm:px-3 py-1.5 rounded-xl border border-blue-200 shadow-2xs">
-                      <span>کد تستی: </span>
-                      <strong className="font-mono text-sm tracking-widest text-blue-600">123456</strong>
-                      <button
-                        type="button"
-                        onClick={() => setOtp('123456')}
-                        className="bg-blue-600 hover:bg-blue-700 text-white text-[11px] px-2 py-0.5 rounded-lg cursor-pointer transition-colors mr-0.5 sm:mr-1"
-                      >
-                        درج خودکار
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="font-bold text-xs text-slate-700">کد تأیید ۶ رقمی:</label>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setOtpStep('phone');
-                          setErrorMessage(null);
-                        }}
-                        className="text-xs text-blue-600 hover:underline cursor-pointer font-medium"
-                      >
-                        ویرایش شماره ({phone})
-                      </button>
-                    </div>
-
-                    <div className="flex items-center bg-slate-50 border-2 border-slate-200 focus-within:border-blue-600 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-600/10 rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3.5 transition-all">
-                      <KeyRound className="w-5 h-5 text-slate-400 ml-2.5 sm:ml-3 shrink-0" />
-                      <input
-                        type="text"
-                        required
-                        maxLength={6}
-                        value={otp}
-                        onChange={e => setOtp(e.target.value)}
-                        placeholder="123456"
-                        className="w-full bg-transparent outline-hidden font-mono font-black text-center text-2xl sm:text-3xl tracking-[0.25em] sm:tracking-[0.4em] text-slate-900"
-                        dir="ltr"
-                        autoFocus
-                      />
-                    </div>
-                  </div>
-
-                  {/* Resend Timer */}
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 bg-slate-50 px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-slate-200">
-                    <div className="flex items-center gap-1.5">
-                      <Clock className="w-4 h-4 text-slate-400 shrink-0" />
-                      {canResend ? (
-                        <button
-                          type="button"
-                          onClick={handleResendCode}
-                          className="text-blue-600 hover:text-blue-700 font-bold cursor-pointer underline text-[11px] sm:text-xs"
-                        >
-                          ارسال مجدد کد پیامکی
-                        </button>
-                      ) : (
-                        <span className="text-[11px] sm:text-xs">زمان باقی‌مانده: <strong className="font-mono text-slate-800 font-bold">{formatTimer(resendTimer)}</strong></span>
-                      )}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setOtp('123456')}
-                      className="text-[11px] text-blue-600 hover:text-blue-700 font-bold cursor-pointer"
-                    >
-                      کد ۱۲۳۴۵۶
-                    </button>
-                  </div>
-
-                  <Button
-                    variant="primary"
-                    size="lg"
-                    className="w-full py-3 sm:py-3.5 rounded-xl font-bold text-xs sm:text-sm shadow-md shadow-blue-600/20 cursor-pointer"
-                    isLoading={isLoading}
-                    type="submit"
-                    icon={<CheckCircle2 className="w-4 h-4" />}
-                  >
-                    {pendingIntent 
-                      ? 'تأیید و ثبت نهایی رزرو نوبت' 
-                      : isFromDoctorSite 
-                      ? 'ورود و انتقال به سایت پزشک' 
-                      : detectedUser?.role === 'doctor'
-                      ? `ورود به مطب ${detectedUser.name}`
-                      : 'تأیید و ورود به پرتال سلامت'}
-                  </Button>
-                </form>
-              )}
-            </div>
-          )}
-
-          {/* ==================================================== */}
-          {/* TAB 2: MEDICAL STAFF & PASSWORD LOGIN */}
+          {/* TAB 1: PASSWORD LOGIN (FOR ALL USERS) */}
           {/* ==================================================== */}
           {activeTab === 'password' && (
             <div className="max-w-md mx-auto">
               <form onSubmit={handlePasswordLogin} className="space-y-4">
-                <div className="bg-gradient-to-r from-indigo-50 to-slate-50 border border-indigo-100 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-xs text-indigo-950 flex items-start gap-2.5 sm:gap-3">
-                  <Stethoscope className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 shrink-0 mt-0.5" />
-                  <div className="leading-relaxed">
-                    <strong className="block text-indigo-900 font-bold mb-0.5">درگاه کادر درمان و پرسنل کلینیک</strong>
-                    ورود پزشکان متخصص با شماره نظام پزشکی، کادر پذیرش، صندوق و مدیریت شعب همرا کلینیک.
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50/60 border border-blue-100 rounded-xl sm:rounded-2xl p-3 sm:p-3.5 text-xs text-blue-950 flex items-start gap-2.5">
+                  <Lock className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                  <div className="leading-relaxed text-[11px] sm:text-xs">
+                    <strong className="block font-bold text-blue-900 mb-0.5">ورود امن با رمز عبور</strong>
+                    جهت دسترسی به نوبت‌ها و پرونده سلامت، شماره موبایل یا کد ملی و رمز عبور خود را وارد کنید. بدون نیاز به انتظار برای پیامک.
                   </div>
                 </div>
 
+                {/* Identifier Input */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <label className="font-bold text-xs text-slate-700">کد نظام پزشکی، شماره همراه یا شناسه سازمانی:</label>
+                    <label className="font-bold text-xs text-slate-700">شماره موبایل یا کدملی:</label>
+                    <span className="text-[10px] sm:text-[11px] text-slate-400">فرمت: ۰۹۱۲۳۴۵۶۷۸۹ یا کدملی</span>
                   </div>
-                  <div className="flex items-center bg-slate-50 border border-slate-200 focus-within:border-indigo-500 focus-within:bg-white focus-within:ring-3 focus-within:ring-indigo-500/10 rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 transition-all">
-                    <UserIcon className="w-4 h-4 text-slate-400 ml-2.5 shrink-0" />
+                  <div className="flex items-center bg-slate-50 border border-slate-200 focus-within:border-blue-500 focus-within:bg-white focus-within:ring-3 focus-within:ring-blue-500/10 rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 transition-all">
+                    <Phone className="w-4 h-4 text-slate-400 ml-2.5 shrink-0" />
                     <input
                       type="text"
                       required
-                      value={staffIdentifier}
-                      onChange={e => setStaffIdentifier(e.target.value)}
-                      placeholder="مثال: ۰۹۱۲۳۳۳۴۴۵۵ یا ۴۸۱۲۵"
-                      className="w-full bg-transparent outline-hidden text-slate-900 text-xs font-semibold"
+                      value={loginIdentifier}
+                      onChange={e => setLoginIdentifier(e.target.value)}
+                      placeholder="۰۹۱۲۱۱۱۲۲۳۳"
+                      className="w-full bg-transparent outline-hidden font-mono font-bold text-slate-900 text-sm tracking-wider"
+                      dir="ltr"
+                      autoFocus
                     />
                   </div>
                 </div>
 
+                {/* Real-time recognized user card if phone matches */}
+                {detectedUser && (
+                  <div className="p-2.5 sm:p-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl sm:rounded-2xl flex items-center justify-between gap-2.5 text-xs animate-in fade-in shadow-2xs">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <img
+                        src={detectedUser.avatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100"}
+                        alt={detectedUser.name}
+                        className="w-8 h-8 rounded-full object-cover border-2 border-blue-400 shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <div className="font-bold text-blue-950 text-xs flex items-center gap-1.5 truncate">
+                          <span>{detectedUser.name}</span>
+                          <BadgeCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                        </div>
+                        <div className="text-[10px] text-blue-700 font-medium truncate">
+                          نقش: {detectedUser.role === 'doctor' ? 'پزشک متخصص' : detectedUser.role === 'patient' ? 'بیمار ثبت‌شده' : 'کادر کلینیک'}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickLogin(detectedUser)}
+                      className="text-xs font-bold text-blue-700 bg-white hover:bg-blue-600 hover:text-white px-2.5 py-1.5 rounded-lg border border-blue-200 transition-all shrink-0 cursor-pointer shadow-2xs"
+                    >
+                      ورود فوری
+                    </button>
+                  </div>
+                )}
+
+                {/* Password Input */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <label className="font-bold text-xs text-slate-700">کلمه عبور سازمانی:</label>
+                    <label className="font-bold text-xs text-slate-700">رمز عبور:</label>
                     <button
                       type="button"
                       onClick={() => setShowForgotHelp(prev => !prev)}
-                      className="text-[11px] text-indigo-600 hover:underline cursor-pointer font-medium"
+                      className="text-[11px] text-blue-600 hover:underline cursor-pointer font-medium"
                     >
                       فراموشی رمز عبور؟
                     </button>
                   </div>
-                  <div className="flex items-center bg-slate-50 border border-slate-200 focus-within:border-indigo-500 focus-within:bg-white focus-within:ring-3 focus-within:ring-indigo-500/10 rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 transition-all">
+                  <div className="flex items-center bg-slate-50 border border-slate-200 focus-within:border-blue-500 focus-within:bg-white focus-within:ring-3 focus-within:ring-blue-500/10 rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 transition-all">
                     <Lock className="w-4 h-4 text-slate-400 ml-2.5 shrink-0" />
                     <input
                       type={showPassword ? 'text' : 'password'}
                       required
-                      value={staffPassword}
-                      onChange={e => setStaffPassword(e.target.value)}
-                      placeholder="کلمه عبور خود را وارد کنید"
+                      value={loginPassword}
+                      onChange={e => setLoginPassword(e.target.value)}
+                      placeholder="رمز عبور خود را وارد نمایید"
                       className="w-full bg-transparent outline-hidden font-mono text-slate-900 text-sm"
                     />
                     <button
@@ -831,13 +508,13 @@ export const LoginPage: React.FC<{ onSuccess?: (user: User) => void }> = ({ onSu
                 </div>
 
                 {showForgotHelp && (
-                  <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl text-xs text-indigo-900 space-y-1 animate-in fade-in">
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 space-y-1 animate-in fade-in">
                     <div className="font-bold flex items-center gap-1.5">
-                      <Headset className="w-4 h-4 text-indigo-600" />
-                      <span>راهنمای بازیابی کلمه عبور کادر درمان:</span>
+                      <Headset className="w-4 h-4 text-blue-600" />
+                      <span>راهنمای ورود و بازیابی رمز عبور:</span>
                     </div>
-                    <p className="text-[11px] leading-relaxed text-indigo-800">
-                      جهت ریست رمز عبور یا تخصیص توکن سخت‌افزاری امضای دیجیتال، با واحد فناوری اطلاعات کلینیک تماس حاصل فرمایید: <strong>۰۲۱-۸۸۹۹۰۰۰۰ (داخلی ۱۰۴)</strong>
+                    <p className="text-[11px] leading-relaxed text-blue-800">
+                      اگر رمز عبور خود را به یاد ندارید، یا برای اولین بار است که به کلینیک مراجعه می‌کنید، می‌توانید از برگه «ثبت‌نام کاربر جدید» به صورت آنی رمز دلخواه خود را تعیین نمایید یا با پشتیبانی کلینیک با شماره <strong>۰۲۱-۸۸۹۹۰۰۰۰</strong> تماس بگیرید.
                     </p>
                   </div>
                 )}
@@ -848,55 +525,212 @@ export const LoginPage: React.FC<{ onSuccess?: (user: User) => void }> = ({ onSu
                       type="checkbox"
                       checked={rememberMe}
                       onChange={e => setRememberMe(e.target.checked)}
-                      className="rounded text-indigo-600 focus:ring-indigo-500"
+                      className="rounded text-blue-600 focus:ring-blue-500"
                     />
-                    <span>نشست کاری در این سیستم فعال بماند</span>
+                    <span>مرا به خاطر بسپار</span>
                   </label>
                 </div>
 
                 <Button
                   variant="primary"
                   size="lg"
-                  className="w-full bg-indigo-600 hover:bg-indigo-700 py-3 sm:py-3.5 rounded-xl font-bold text-xs sm:text-sm shadow-md shadow-indigo-600/20 cursor-pointer"
+                  className="w-full py-3 sm:py-3.5 rounded-xl font-bold text-xs sm:text-sm shadow-md shadow-blue-600/20 cursor-pointer"
                   isLoading={isLoading}
                   type="submit"
                   icon={<ArrowLeft className="w-4 h-4" />}
                 >
-                  ورود به پنل کادر درمان
+                  {pendingIntent 
+                    ? 'ورود و نهایی‌سازی رزرو نوبت' 
+                    : isFromDoctorSite 
+                    ? 'ورود و بازگشت به مطب پزشک' 
+                    : 'ورود به حساب کاربری'}
                 </Button>
 
-                {/* Quick Staff Credentials for easy demo evaluation */}
-                <div className="mt-3.5 pt-3 border-t border-slate-200 space-y-2">
-                  <span className="text-[11px] text-slate-500 font-bold block">ورود سریع کادر درمان با یک کلیک:</span>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                {/* Callout to switch to register tab */}
+                <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-600">
+                  <span>حساب کاربری ندارید یا کاربر جدید هستید؟</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('register');
+                      setErrorMessage(null);
+                      setSuccessMessage(null);
+                    }}
+                    className="text-blue-600 hover:text-blue-800 font-bold hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span>ثبت‌نام کاربر جدید و تعیین رمز</span>
+                  </button>
+                </div>
+
+                {/* Demo Quick Login Buttons */}
+                <div className="pt-3 border-t border-slate-100 space-y-2">
+                  <span className="text-[11px] text-slate-500 font-bold block">ورود سریع به حساب‌های نمونه:</span>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (patientUser) handleQuickLogin(patientUser);
+                      }}
+                      className="p-2 rounded-xl border border-blue-200 bg-blue-50/60 hover:bg-blue-100 text-blue-900 text-right transition-all cursor-pointer"
+                    >
+                      <div className="font-bold text-[11px]">امیرحسین رضایی</div>
+                      <div className="text-[9px] text-blue-700">بیمار کلینیک (دمو)</div>
+                    </button>
                     <button
                       type="button"
                       onClick={() => {
                         const doc = doctorsList[0];
                         if (doc) handleQuickLogin(doc);
                       }}
-                      className="p-2.5 rounded-xl border border-indigo-200 bg-indigo-50/50 hover:bg-indigo-100/70 text-indigo-900 text-right transition-all cursor-pointer flex items-center justify-between sm:block"
+                      className="p-2 rounded-xl border border-indigo-200 bg-indigo-50/60 hover:bg-indigo-100 text-indigo-900 text-right transition-all cursor-pointer"
                     >
-                      <div>
-                        <div className="font-bold text-xs">دکتر مریم حسینی</div>
-                        <div className="text-[10px] text-indigo-700">مطب قلب و عروق</div>
-                      </div>
-                      <ChevronLeft className="w-3.5 h-3.5 text-indigo-400 sm:hidden" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (secretaryUser) handleQuickLogin(secretaryUser);
-                      }}
-                      className="p-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-800 text-right transition-all cursor-pointer flex items-center justify-between sm:block"
-                    >
-                      <div>
-                        <div className="font-bold text-xs">سارا کاظمی</div>
-                        <div className="text-[10px] text-slate-500">پذیرش و منشی مطب</div>
-                      </div>
-                      <ChevronLeft className="w-3.5 h-3.5 text-slate-400 sm:hidden" />
+                      <div className="font-bold text-[11px]">دکتر مریم حسینی</div>
+                      <div className="text-[9px] text-indigo-700">پزشک قلب و عروق</div>
                     </button>
                   </div>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* ==================================================== */}
+          {/* TAB 2: REGISTER NEW USER (NAME + PHONE + PASSWORD) */}
+          {/* ==================================================== */}
+          {activeTab === 'register' && (
+            <div className="max-w-md mx-auto">
+              <form onSubmit={handleRegister} className="space-y-3.5 sm:space-y-4">
+                <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-100 rounded-xl sm:rounded-2xl p-3 sm:p-3.5 text-xs text-emerald-950 flex items-start gap-2.5">
+                  <UserPlus className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div className="leading-relaxed text-[11px] sm:text-xs">
+                    <strong className="block font-bold text-emerald-900 mb-0.5">ثبت‌نام مستقیم و آنی کاربر جدید</strong>
+                    مشخصات خود را تکمیل کرده و رمز دلخواه خود را تعیین کنید. برای مراجعات بعدی با همین شماره و رمز عبور خود وارد خواهید شد.
+                  </div>
+                </div>
+
+                {/* Full Name */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">نام و نام خانوادگی:</label>
+                  <div className="flex items-center bg-slate-50 border border-slate-200 focus-within:border-emerald-500 focus-within:bg-white focus-within:ring-3 focus-within:ring-emerald-500/10 rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2 sm:py-2.5 transition-all">
+                    <UserIcon className="w-4 h-4 text-slate-400 ml-2.5 shrink-0" />
+                    <input
+                      type="text"
+                      required
+                      value={regFullName}
+                      onChange={e => setRegFullName(e.target.value)}
+                      placeholder="مثال: نرگس محمدی"
+                      className="w-full bg-transparent outline-hidden text-slate-900 text-xs font-semibold"
+                      autoFocus
+                    />
+                  </div>
+                </div>
+
+                {/* Mobile Phone */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-xs text-slate-700">شماره تلفن همراه:</label>
+                    <span className="text-[10px] text-slate-400">۱۱ رقمی با ۰۹</span>
+                  </div>
+                  <div className="flex items-center bg-slate-50 border border-slate-200 focus-within:border-emerald-500 focus-within:bg-white focus-within:ring-3 focus-within:ring-emerald-500/10 rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2 sm:py-2.5 transition-all">
+                    <Phone className="w-4 h-4 text-slate-400 ml-2.5 shrink-0" />
+                    <input
+                      type="tel"
+                      required
+                      value={regPhone}
+                      onChange={e => setRegPhone(e.target.value)}
+                      placeholder="۰۹۱۲۳۴۵۶۷۸۹"
+                      className="w-full bg-transparent outline-hidden font-mono font-bold text-slate-900 text-xs tracking-wider"
+                      dir="ltr"
+                    />
+                  </div>
+                </div>
+
+                {/* National Code (Optional) */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700">کد ملی ۱۰ رقمی:</label>
+                    <span className="text-[10px] text-slate-400">اختیاری (جهت تشکیل پرونده سلامت)</span>
+                  </div>
+                  <div className="flex items-center bg-slate-50 border border-slate-200 focus-within:border-emerald-500 focus-within:bg-white focus-within:ring-3 focus-within:ring-emerald-500/10 rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2 sm:py-2.5 transition-all">
+                    <CreditCard className="w-4 h-4 text-slate-400 ml-2.5 shrink-0" />
+                    <input
+                      type="text"
+                      maxLength={10}
+                      value={regNationalCode}
+                      onChange={e => setRegNationalCode(e.target.value)}
+                      placeholder="۰۰۱۲۳۴۵۶۷۸"
+                      className="w-full bg-transparent outline-hidden font-mono text-slate-900 text-xs tracking-widest"
+                      dir="ltr"
+                    />
+                  </div>
+                </div>
+
+                {/* Password Selection */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700">کلمه عبور انتخابی:</label>
+                    <div className="flex items-center bg-slate-50 border border-slate-200 focus-within:border-emerald-500 focus-within:bg-white focus-within:ring-3 focus-within:ring-emerald-500/10 rounded-xl px-3 py-2 transition-all">
+                      <Lock className="w-3.5 h-3.5 text-slate-400 ml-2 shrink-0" />
+                      <input
+                        type={showRegPassword ? 'text' : 'password'}
+                        required
+                        value={regPassword}
+                        onChange={e => setRegPassword(e.target.value)}
+                        placeholder="حداقل ۴ کاراکتر"
+                        className="w-full bg-transparent outline-hidden font-mono text-slate-900 text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700">تکرار کلمه عبور:</label>
+                    <div className="flex items-center bg-slate-50 border border-slate-200 focus-within:border-emerald-500 focus-within:bg-white focus-within:ring-3 focus-within:ring-emerald-500/10 rounded-xl px-3 py-2 transition-all">
+                      <Lock className="w-3.5 h-3.5 text-slate-400 ml-2 shrink-0" />
+                      <input
+                        type={showRegPassword ? 'text' : 'password'}
+                        required
+                        value={regConfirmPassword}
+                        onChange={e => setRegConfirmPassword(e.target.value)}
+                        placeholder="تکرار رمز عبور"
+                        className="w-full bg-transparent outline-hidden font-mono text-slate-900 text-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowRegPassword(!showRegPassword)}
+                        className="text-slate-400 hover:text-slate-600 cursor-pointer mr-1.5"
+                      >
+                        {showRegPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <Button
+                  variant="primary"
+                  size="lg"
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 py-3 sm:py-3.5 rounded-xl font-bold text-xs sm:text-sm shadow-md shadow-emerald-600/20 cursor-pointer"
+                  isLoading={isLoading}
+                  type="submit"
+                  icon={<CheckCircle2 className="w-4 h-4" />}
+                >
+                  ثبت‌نام و ورود به سامانه
+                </Button>
+
+                {/* Callout to switch back to login */}
+                <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-600">
+                  <span>قبلاً در سامانه ثبت‌نام کرده‌اید؟</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('password');
+                      setErrorMessage(null);
+                      setSuccessMessage(null);
+                    }}
+                    className="text-emerald-700 hover:text-emerald-900 font-bold hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>ورود با شماره و رمز عبور</span>
+                  </button>
                 </div>
               </form>
             </div>
@@ -1004,10 +838,10 @@ export const LoginPage: React.FC<{ onSuccess?: (user: User) => void }> = ({ onSu
                       ) : (
                         <button
                           type="button"
-                          onClick={() => setActiveTab('otp')}
+                          onClick={() => setActiveTab('password')}
                           className="w-full py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors cursor-pointer"
                         >
-                          ورود بیمار با شماره همراه
+                          ورود بیمار با رمز عبور
                         </button>
                       )}
                     </div>

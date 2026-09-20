@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Doctor, Review, Appointment } from '../types';
 import { apiService } from '../services/apiService';
 import { setSeoMetaData } from '../utils/seoUtils';
@@ -31,14 +31,21 @@ export const DoctorProfilePage: React.FC<DoctorProfilePageProps> = ({
 }) => {
   const { currentUser } = useAuth();
   const params = useParams<{ slug: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const slug = propSlug || params.slug || '';
+  const isDirectBookingRequest = searchParams.get('book') === 'true' || searchParams.get('booking') === 'true';
 
   const [doctor, setDoctor] = useState<Doctor | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [activeTab, setActiveTab] = useState<'about' | 'services' | 'insurances' | 'reviews'>('about');
   const [showWizardModal, setShowWizardModal] = useState(false);
   const [familyMembers, setFamilyMembers] = useState<any[]>([]);
+
+  // Ensure view is scrolled to top on mount or when doctor slug changes
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [slug]);
 
   useEffect(() => {
     if (slug) {
@@ -52,7 +59,7 @@ export const DoctorProfilePage: React.FC<DoctorProfilePageProps> = ({
           apiService.getDoctorReviews(doc.id).then(setReviews);
 
           const pending = bookingIntentService.get();
-          if (pending && (pending.doctorId === doc.id || pending.doctorSlug === doc.slug)) {
+          if ((pending && (pending.doctorId === doc.id || pending.doctorSlug === doc.slug)) || isDirectBookingRequest) {
             setShowWizardModal(true);
           }
         }
@@ -64,7 +71,7 @@ export const DoctorProfilePage: React.FC<DoctorProfilePageProps> = ({
     } else {
       setFamilyMembers([]);
     }
-  }, [slug, currentUser?.id]);
+  }, [slug, currentUser?.id, isDirectBookingRequest]);
 
   const handleBack = () => {
     if (onBack) {
@@ -329,8 +336,8 @@ export const DoctorProfilePage: React.FC<DoctorProfilePageProps> = ({
 
       {/* Appointment Wizard Overlay Modal */}
       {showWizardModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="w-full max-w-2xl max-h-[96vh] sm:max-h-[90vh] overflow-y-auto rounded-2xl sm:rounded-3xl">
             <AppointmentWizard
               doctor={doctor}
               familyMembers={familyMembers}

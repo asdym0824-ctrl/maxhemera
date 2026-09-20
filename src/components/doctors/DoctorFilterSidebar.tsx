@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
 import { Specialty } from '../../types';
-import { Filter, RotateCcw, Check, ShieldCheck, Sparkles } from 'lucide-react';
+import { Filter, RotateCcw, Check, ShieldCheck, Sparkles, MapPin, X } from 'lucide-react';
 import { MOCK_INSURANCES } from '../../data/mockData';
+import { IRAN_PROVINCES } from '../../data/provinces';
 import { InsuranceFinderModal } from '../insurance/InsuranceFinderModal';
 
 interface DoctorFilterSidebarProps {
   specialties: Specialty[];
   selectedSpecialtyId: string;
   setSelectedSpecialtyId: (id: string) => void;
+  selectedProvince: string;
+  setSelectedProvince: (province: string) => void;
   hasOnlineConsultation: boolean;
   setHasOnlineConsultation: (val: boolean) => void;
   selectedGender: 'all' | 'male' | 'female';
@@ -23,6 +26,8 @@ export const DoctorFilterSidebar: React.FC<DoctorFilterSidebarProps> = ({
   specialties,
   selectedSpecialtyId,
   setSelectedSpecialtyId,
+  selectedProvince,
+  setSelectedProvince,
   hasOnlineConsultation,
   setHasOnlineConsultation,
   selectedGender,
@@ -93,6 +98,57 @@ export const DoctorFilterSidebar: React.FC<DoctorFilterSidebarProps> = ({
               >
                 <span>{item.label}</span>
                 {sortBy === item.id && <Check className="w-3.5 h-3.5 text-blue-600" />}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Province Filter */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+              <MapPin className="w-3.5 h-3.5 text-blue-600" />
+              <span>استان محل طبابت:</span>
+            </label>
+            {selectedProvince && (
+              <button
+                type="button"
+                onClick={() => setSelectedProvince('')}
+                className="text-[10px] text-rose-600 hover:text-rose-700 font-medium flex items-center gap-0.5 cursor-pointer"
+              >
+                <X className="w-3 h-3" />
+                حذف فیلتر
+              </button>
+            )}
+          </div>
+          <select
+            id="doctor-province-filter-select"
+            value={selectedProvince}
+            onChange={e => setSelectedProvince(e.target.value)}
+            className="w-full text-xs bg-slate-50 border border-slate-200/80 rounded-xl p-2.5 text-slate-800 outline-hidden focus:ring-2 focus:ring-blue-600/30 transition-all cursor-pointer font-medium"
+          >
+            <option value="">همه استان‌ها ({IRAN_PROVINCES.length} استان)</option>
+            {IRAN_PROVINCES.map(p => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+
+          {/* Quick province chips */}
+          <div className="flex flex-wrap gap-1 pt-1">
+            {['استان تهران', 'استان البرز', 'استان اصفهان', 'استان خراسان رضوی', 'استان فارس', 'استان آذربایجان شرقی'].map(prov => (
+              <button
+                key={prov}
+                type="button"
+                onClick={() => setSelectedProvince(selectedProvince === prov ? '' : prov)}
+                className={`text-[10px] px-2 py-1 rounded-lg border transition-all cursor-pointer ${
+                  selectedProvince === prov
+                    ? 'bg-blue-600 text-white font-bold border-blue-600 shadow-xs'
+                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                {prov.replace('استان ', '')}
               </button>
             ))}
           </div>

@@ -47,6 +47,8 @@ import {
   supportsInsurance
 } from './insuranceCoverageEngine';
 import { formatStandardIranianMobile } from '../utils/validationUtils';
+import { isDoctorInProvince } from '../data/provinces';
+import { realtimeSyncService } from './realtimeSyncService';
 
 export function generateAppointmentTrackingCode(existingAppointments: Appointment[]): string {
   const existingCodes = new Set(existingAppointments.map(a => a.trackingCode));
@@ -261,6 +263,7 @@ function getStoredDoctors(): Doctor[] {
     return {
       ...mockDoc,
       ...existing,
+      province: existing.province || mockDoc.province || 'استان تهران',
       slug: existing.slug || mockDoc.slug,
       clinicId: existing.clinicId || mockDoc.clinicId || 'clinic-1',
       branchId: existing.branchId || mockDoc.branchId || 'branch-1',
@@ -544,6 +547,7 @@ export const apiService = {
     hasOnlineConsultation?: boolean;
     gender?: 'male' | 'female';
     insurance?: string;
+    province?: string;
     branchId?: string;
     timing?: 'all' | 'today' | 'tomorrow' | '3days' | 'evening';
     seniority?: 'all' | 'fellowship' | 'specialist' | 'experience10';
@@ -554,6 +558,10 @@ export const apiService = {
 
     if (filters?.specialtyId) {
       doctors = doctors.filter(d => d.specialtyId === filters.specialtyId);
+    }
+
+    if (filters?.province) {
+      doctors = doctors.filter(d => isDoctorInProvince(d, filters.province!));
     }
 
     if (filters?.hasOnlineConsultation) {
@@ -1055,6 +1063,35 @@ export const apiService = {
     appointments.unshift(created);
     saveAppointments(appointments);
 
+    // Instant real-time broadcast to Doctor and Secretary panels across all tabs & sessions
+    try {
+      realtimeSyncService.publishAppointmentCreated(created);
+      realtimeSyncService.playGentleChime();
+    } catch (e) {
+      console.warn('Realtime publish warning:', e);
+    }
+
+    // Auto-generate high-priority confirmation task for Secretary Workspace
+    try {
+      this.createTask({
+        title: `تأیید نوبت جدید (${created.patientName} - ${created.doctorName})`,
+        description: `نوبت ${created.visitType === 'in_person' ? 'حضوری' : 'آنلاین'} برای تاریخ ${created.date} ساعت ${created.timeSlot} ثبت شد. کد پیگیری: ${created.trackingCode}`,
+        type: 'confirm_appointment',
+        priority: 'high',
+        clinicId: created.clinicId,
+        branchId: created.branchId,
+        assignedTo: 'user-secretary-1',
+        assignedToName: 'سارا کاظمی',
+        assignedRole: 'secretary',
+        patientId: created.patientId,
+        patientName: created.patientName,
+        patientPhone: created.patientPhone,
+        dueDate: created.date
+      });
+    } catch {
+      // Non-blocking task creation
+    }
+
     this.logActivity({
       actorUserId: actor?.actorUserId || resolvedPatientId,
       actorName: actor?.actorName || newApp.patientName,
@@ -1211,6 +1248,7 @@ export const apiService = {
     if (status === 'arrived' && !updated.arrivedAt) {
       updated.arrivedAt = nowISO;
     } else if (status === 'in_visit') {
+      if (!updated.arrivedAt) updated.arrivedAt = nowISO;
       if (!updated.visitStartedAt) updated.visitStartedAt = nowISO;
       if (updated.arrivedAt) {
         updated.waitingDurationMinutes = calculateWaitTimeMinutes(updated.arrivedAt, nowISO) || undefined;
