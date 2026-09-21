@@ -120,7 +120,8 @@ const STORAGE_KEYS = {
   NOTIFICATIONS: 'synapse_notifications_v4',
   CLINIC: 'synapse_clinic_v4',
   STAFF: 'synapse_staff_v4',
-  MEMBERSHIPS: 'synapse_clinic_memberships_v4'
+  MEMBERSHIPS: 'synapse_clinic_memberships_v4',
+  MEDICAL_RECORDS: 'synapse_medical_records_v4'
 };
 
 function migrateDataV3ToV4(): void {
@@ -188,6 +189,9 @@ function migrateDataV3ToV4(): void {
     }
     if (!localStorage.getItem(STORAGE_KEYS.FAMILY_MEMBERS)) {
       localStorage.setItem(STORAGE_KEYS.FAMILY_MEMBERS, JSON.stringify(MOCK_FAMILY_MEMBERS));
+    }
+    if (!localStorage.getItem(STORAGE_KEYS.MEDICAL_RECORDS)) {
+      localStorage.setItem(STORAGE_KEYS.MEDICAL_RECORDS, JSON.stringify(MOCK_MEDICAL_RECORDS));
     }
   } catch (err) {
     console.error('Data migration error:', err);
@@ -484,6 +488,26 @@ function getStoredFamilyMembers(): FamilyMember[] {
 
 function saveFamilyMembers(members: FamilyMember[]): void {
   localStorage.setItem(STORAGE_KEYS.FAMILY_MEMBERS, JSON.stringify(members));
+}
+
+function getStoredMedicalRecords(): MedicalRecord[] {
+  const local = localStorage.getItem(STORAGE_KEYS.MEDICAL_RECORDS);
+  if (local) {
+    try {
+      return JSON.parse(local);
+    } catch {
+      // fallback
+    }
+  }
+  localStorage.setItem(STORAGE_KEYS.MEDICAL_RECORDS, JSON.stringify(MOCK_MEDICAL_RECORDS));
+  return MOCK_MEDICAL_RECORDS;
+}
+
+function saveMedicalRecords(records: MedicalRecord[]): void {
+  localStorage.setItem(STORAGE_KEYS.MEDICAL_RECORDS, JSON.stringify(records));
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('synapse_medical_records_updated'));
+  }
 }
 
 export const apiService = {
@@ -1289,8 +1313,21 @@ export const apiService = {
 
   // Medical Records & Timeline
   async getPatientMedicalRecords(patientId: string): Promise<MedicalRecord[]> {
+    await delay(30);
+    const records = getStoredMedicalRecords();
+    return records.filter(r => r.patientId === patientId);
+  },
+
+  async addMedicalRecord(newRecord: Omit<MedicalRecord, 'id'> | MedicalRecord): Promise<MedicalRecord> {
     await delay(40);
-    return MOCK_MEDICAL_RECORDS.filter(r => r.patientId === patientId);
+    const records = getStoredMedicalRecords();
+    const record: MedicalRecord = {
+      ...newRecord,
+      id: ('id' in newRecord && newRecord.id) ? newRecord.id : `rec-${Date.now()}`
+    };
+    records.unshift(record);
+    saveMedicalRecords(records);
+    return record;
   },
 
   // Family Members

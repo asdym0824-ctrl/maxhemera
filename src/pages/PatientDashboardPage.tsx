@@ -29,15 +29,20 @@ import {
   Heart,
   Info,
   Building2,
-  Plus
+  Plus,
+  Crop,
+  Zap,
+  Bell
 } from 'lucide-react';
 import { Badge } from '../components/common/Badge';
 import { Button } from '../components/common/Button';
 import { Modal } from '../components/common/Modal';
+import { ImageCropperModal } from '../components/common/ImageCropperModal';
 import { HealthTimeline } from '../components/patient/HealthTimeline';
 import { FamilyHealthManager } from '../components/patient/FamilyHealthManager';
 import { SmartQueueWidget } from '../components/patient/SmartQueueWidget';
 import { MedicalVectorPattern } from '../components/common/medicalPattern/MedicalVectorPattern';
+import { realtimeSyncService } from '../services/realtimeSyncService';
 
 const AVATAR_PRESETS = [
   'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
@@ -56,6 +61,8 @@ export const PatientDashboardPage: React.FC<{ onNavigateToDoctors: () => void }>
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
   const [avatarSuccessMsg, setAvatarSuccessMsg] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isCropperOpen, setIsCropperOpen] = useState(false);
+  const [selectedImageForCrop, setSelectedImageForCrop] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const getActiveTab = () => {
@@ -75,10 +82,13 @@ export const PatientDashboardPage: React.FC<{ onNavigateToDoctors: () => void }>
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [records, setRecords] = useState<MedicalRecord[]>([]);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
+  const [newPrescriptionAlert, setNewPrescriptionAlert] = useState<MedicalRecord | null>(null);
 
   useEffect(() => {
     document.title = 'پرونده و نوبت‌های بیمار | همرا کلینیک';
-    if (currentUser) {
+    if (!currentUser) return;
+
+    const loadPatientData = () => {
       Promise.all([
         apiService.getAppointmentsByPatient(currentUser.id),
         apiService.getPatientMedicalRecords(currentUser.id),
@@ -88,7 +98,48 @@ export const PatientDashboardPage: React.FC<{ onNavigateToDoctors: () => void }>
         setRecords(recs);
         setFamilyMembers(fams);
       });
-    }
+    };
+
+    loadPatientData();
+
+    // Subscribe to real-time medical records / prescription broadcasts
+    const unsubscribeRecords = realtimeSyncService.subscribeToMedicalRecords((newRecord) => {
+      const isForCurrentPatient = 
+        newRecord.patientId === currentUser.id ||
+        (currentUser.id === 'user-patient-1' && (newRecord.patientId === 'patient-1' || !newRecord.patientId));
+
+      if (isForCurrentPatient) {
+        setRecords(prev => {
+          if (prev.some(r => r.id === newRecord.id)) return prev;
+          return [newRecord, ...prev];
+        });
+        setNewPrescriptionAlert(newRecord);
+        try {
+          realtimeSyncService.playGentleChime();
+        } catch {
+          // Audio autoplay safe
+        }
+      } else {
+        apiService.getPatientMedicalRecords(currentUser.id).then(setRecords);
+      }
+    });
+
+    const handleRecordsChanged = () => {
+      apiService.getPatientMedicalRecords(currentUser.id).then(setRecords);
+    };
+
+    const handleAppointmentsChanged = () => {
+      apiService.getAppointmentsByPatient(currentUser.id).then(setAppointments);
+    };
+
+    window.addEventListener('synapse_medical_records_updated', handleRecordsChanged);
+    window.addEventListener('synapse_appointments_updated', handleAppointmentsChanged);
+
+    return () => {
+      unsubscribeRecords();
+      window.removeEventListener('synapse_medical_records_updated', handleRecordsChanged);
+      window.removeEventListener('synapse_appointments_updated', handleAppointmentsChanged);
+    };
   }, [currentUser]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -96,26 +147,46 @@ export const PatientDashboardPage: React.FC<{ onNavigateToDoctors: () => void }>
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      alert('لطفاً یک فایل تصویری (JPG، PNG، WebP) انتخاب فرمایید.');
+      alert('لطفاً یک فایل تصویری معتبر (JPG، PNG، WebP) انتخاب فرمایید.');
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      alert('حداکثر حجم تصویر ۵ مگابایت است.');
+    if (file.size > 8 * 1024 * 1024) {
+      alert('حداکثر حجم تصویر ۸ مگابایت است.');
       return;
     }
 
-    setIsUploading(true);
     const reader = new FileReader();
-    reader.onload = async () => {
+    reader.onload = () => {
       const base64 = reader.result as string;
-      await updateCurrentUser({ avatar: base64 });
-      setIsUploading(false);
+      setSelectedImageForCrop(base64);
+      setIsCropperOpen(true);
+    };
+    reader.readAsDataURL(file);
+
+    // Reset input to allow selecting same file again
+    e.target.value = '';
+  };
+
+  const handleCropComplete = async (croppedBase64: string) => {
+    setIsUploading(true);
+    try {
+      await updateCurrentUser({ avatar: croppedBase64 });
       setAvatarSuccessMsg(true);
       setTimeout(() => setAvatarSuccessMsg(false), 3500);
       setIsAvatarModalOpen(false);
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Failed to update avatar:', err);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleOpenCurrentForCrop = () => {
+    if (currentUser?.avatar) {
+      setSelectedImageForCrop(currentUser.avatar);
+      setIsCropperOpen(true);
+    }
   };
 
   const handleSelectPreset = async (presetUrl: string) => {
@@ -315,6 +386,63 @@ export const PatientDashboardPage: React.FC<{ onNavigateToDoctors: () => void }>
 
         {/* Main Workspace Area */}
         <div className="lg:col-span-3 space-y-5 sm:space-y-6">
+
+          {/* Real-Time Prescription Alert Banner */}
+          {newPrescriptionAlert && (
+            <div
+              id="patient-realtime-prescription-banner"
+              className="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white p-4 sm:p-5 rounded-2xl sm:rounded-3xl shadow-lg border border-emerald-400/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in slide-in-from-top-4 duration-300"
+            >
+              <div className="flex items-start sm:items-center gap-3">
+                <div className="p-2.5 bg-white/20 rounded-xl backdrop-blur-xs shrink-0 animate-bounce">
+                  <Pill className="w-5 h-5 text-white" />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="bg-white text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <Zap className="w-3 h-3 text-amber-500 fill-amber-500" />
+                      درجا و بلادرنگ (Real-Time)
+                    </span>
+                    <span className="font-extrabold text-sm sm:text-base">
+                      نسخه الکترونیک جدید توسط {newPrescriptionAlert.doctorName} ثبت شد!
+                    </span>
+                  </div>
+                  <p className="text-xs text-emerald-100 leading-relaxed font-medium">
+                    {newPrescriptionAlert.summary || newPrescriptionAlert.details}
+                  </p>
+                  {newPrescriptionAlert.medications && newPrescriptionAlert.medications.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {newPrescriptionAlert.medications.map((m, idx) => (
+                        <span key={idx} className="bg-emerald-800/60 text-emerald-100 text-[10px] px-2 py-0.5 rounded-md border border-emerald-400/30">
+                          💊 {m.name} ({m.dosage} - {m.frequency})
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 self-end sm:self-auto shrink-0 pt-2 sm:pt-0">
+                <button
+                  id="view-prescription-btn"
+                  onClick={() => {
+                    handleTabChange('records');
+                    setNewPrescriptionAlert(null);
+                  }}
+                  className="px-3.5 py-2 bg-white text-emerald-900 font-bold rounded-xl text-xs hover:bg-emerald-50 transition-colors shadow-sm cursor-pointer flex items-center gap-1.5"
+                >
+                  <FileText className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>مشاهده در پرونده سلامت</span>
+                </button>
+                <button
+                  onClick={() => setNewPrescriptionAlert(null)}
+                  className="p-2 text-emerald-200 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer text-sm"
+                  title="بستن پیام"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          )}
           
           {/* TAB 1: DASHBOARD MAIN OVERVIEW */}
           {activeTab === 'home' && (
@@ -760,33 +888,45 @@ export const PatientDashboardPage: React.FC<{ onNavigateToDoctors: () => void }>
                 alt={currentUser?.name || 'کاربر'}
                 className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg mx-auto"
               />
-              <span className="absolute bottom-0 right-0 bg-blue-600 text-white p-1 rounded-full border-2 border-white">
+              <span className="absolute bottom-0 right-0 bg-blue-600 text-white p-1 rounded-full border-2 border-white shadow-xs">
                 <Check className="w-3.5 h-3.5" />
               </span>
             </div>
-            <div className="mt-3">
+            <div className="mt-3 space-y-1">
               <p className="font-bold text-sm text-slate-900">{currentUser?.name}</p>
-              <p className="text-xs text-slate-500">{currentUser?.phone}</p>
+              <p className="text-xs text-slate-500 font-mono">{currentUser?.phone}</p>
             </div>
+            {/* Quick Edit Current Image Button */}
+            {currentUser?.avatar && (
+              <button
+                type="button"
+                onClick={handleOpenCurrentForCrop}
+                className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors border border-blue-200/80 cursor-pointer shadow-2xs active:scale-95"
+              >
+                <Crop className="w-3.5 h-3.5 text-blue-600" />
+                <span>ویرایش و برش کادر تصویر فعلی</span>
+              </button>
+            )}
           </div>
 
           {/* Upload From Device Dropzone */}
           <div className="space-y-2">
             <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
               <Upload className="w-4 h-4 text-blue-600" />
-              بارگذاری عکس از گالری یا رایانه:
+              بارگذاری عکس با قابلیت برش و ویرایش:
             </label>
             
             <div 
               onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-blue-200 hover:border-blue-500 bg-blue-50/40 hover:bg-blue-50 rounded-2xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 group"
+              className="border-2 border-dashed border-blue-200 hover:border-blue-500 bg-blue-50/40 hover:bg-blue-50 rounded-2xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 group active:scale-[0.99]"
             >
-              <div className="w-12 h-12 rounded-2xl bg-blue-100 group-hover:bg-blue-600 group-hover:text-white text-blue-600 flex items-center justify-center transition-colors">
+              <div className="w-12 h-12 rounded-2xl bg-blue-100 group-hover:bg-blue-600 group-hover:text-white text-blue-600 flex items-center justify-center transition-colors shadow-xs">
                 <Camera className="w-6 h-6" />
               </div>
               <div className="text-xs">
-                <span className="font-bold text-blue-700 hover:underline">کلیک کنید یا تصویر را اینجا رها فرمایید</span>
-                <p className="text-[11px] text-slate-400 mt-1">فرمت‌های مجاز: JPG, PNG, WebP (حداکثر ۵ مگابایت)</p>
+                <span className="font-bold text-blue-700 hover:underline">کلیک کنید تا عکس را انتخاب و ویرایش کنید</span>
+                <p className="text-[11px] text-slate-500 mt-1">امکان جابجایی تصویر، بزرگ‌نمایی، چرخش ۹۰ درجه و کادربندی دایره‌ای</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">فرمت‌های مجاز: JPG, PNG, WebP (حداکثر ۸ مگابایت)</p>
               </div>
             </div>
           </div>
@@ -803,7 +943,7 @@ export const PatientDashboardPage: React.FC<{ onNavigateToDoctors: () => void }>
                   key={idx}
                   type="button"
                   onClick={() => handleSelectPreset(preset)}
-                  className={`relative rounded-2xl p-1 border-2 transition-all hover:scale-105 cursor-pointer ${
+                  className={`relative rounded-2xl p-1 border-2 transition-all hover:scale-105 active:scale-95 cursor-pointer ${
                     currentUser?.avatar === preset 
                       ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-600/30' 
                       : 'border-slate-200 hover:border-blue-300'
@@ -825,7 +965,7 @@ export const PatientDashboardPage: React.FC<{ onNavigateToDoctors: () => void }>
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
+          <div className="flex items-center justify-between gap-2 pt-4 border-t border-slate-100">
             <Button
               variant="outline"
               size="sm"
@@ -833,18 +973,39 @@ export const PatientDashboardPage: React.FC<{ onNavigateToDoctors: () => void }>
             >
               انصراف
             </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              icon={<Upload className="w-4 h-4" />}
-              isLoading={isUploading}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              انتخاب عکس جدید
-            </Button>
+            <div className="flex items-center gap-2">
+              {currentUser?.avatar && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<Crop className="w-4 h-4 text-blue-600" />}
+                  onClick={handleOpenCurrentForCrop}
+                >
+                  ویرایش تصویر فعلی
+                </Button>
+              )}
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<Camera className="w-4 h-4" />}
+                isLoading={isUploading}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                انتخاب و برش عکس جدید
+              </Button>
+            </div>
           </div>
         </div>
       </Modal>
+
+      {/* Interactive Image Cropper Modal */}
+      <ImageCropperModal
+        isOpen={isCropperOpen}
+        onClose={() => setIsCropperOpen(false)}
+        imageSrc={selectedImageForCrop}
+        onCropComplete={handleCropComplete}
+        title="ویرایش، تنظیم کادر و برش تصویر"
+      />
     </div>
   );
 };

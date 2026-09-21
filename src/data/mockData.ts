@@ -26,6 +26,7 @@ import {
   ScheduleBlock
 } from '../types';
 import { getRelativeISODate } from '../utils/dateUtils';
+import drSaraMohammadiAvatar from '../assets/images/dr_sara_portrait_1789682606727.jpg';
 
 export const INITIAL_USERS: User[] = [
   {
@@ -64,7 +65,7 @@ export const INITIAL_USERS: User[] = [
     role: 'doctor',
     doctorId: 'doc-3',
     clinicId: 'clinic-1',
-    avatar: 'https://images.unsplash.com/photo-1594824813515-5853b05f2425?auto=format&fit=crop&q=80&w=300',
+    avatar: drSaraMohammadiAvatar,
     nationalId: '0045678901'
   },
   {
@@ -671,7 +672,7 @@ export const MOCK_DOCTORS: Doctor[] = [
     medicalCouncilNumber: '۶۱۲۴۰',
     specialtyId: 'spec-derm',
     specialtyName: 'پوست، مو و زیبایی',
-    avatar: 'https://images.unsplash.com/photo-1594824813566-82823d5afe4a?auto=format&fit=crop&q=80&w=300',
+    avatar: drSaraMohammadiAvatar,
     rating: 4.9,
     reviewCount: 512,
     experienceYears: 12,
@@ -1208,7 +1209,7 @@ export const MOCK_DOCTORS: Doctor[] = [
     medicalCouncilNumber: '۵۲۱۰۰',
     specialtyId: 'spec-obgyn',
     specialtyName: 'زنان و زایمان',
-    avatar: 'https://images.unsplash.com/photo-1594824813566-82823d5afe4a?auto=format&fit=crop&q=80&w=300',
+    avatar: 'https://images.unsplash.com/photo-1527613426441-4da17471b66d?auto=format&fit=crop&q=80&w=300',
     rating: 4.9,
     reviewCount: 290,
     experienceYears: 15,

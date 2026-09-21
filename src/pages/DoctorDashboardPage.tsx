@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Appointment, MedicalRecord, Doctor, ClinicTask } from '../types';
 import { apiService } from '../services/apiService';
@@ -21,16 +21,18 @@ import {
 } from 'lucide-react';
 import { Badge } from '../components/common/Badge';
 import { Button } from '../components/common/Button';
+import { Modal } from '../components/common/Modal';
+import { ImageCropperModal } from '../components/common/ImageCropperModal';
 import { PatientClinicalModal } from '../components/doctorPortal/PatientClinicalModal';
 import { DoctorWebsiteManager } from '../components/doctorPortal/DoctorWebsiteManager';
 import { SecretaryTaskCenter } from '../components/secretary/SecretaryTaskCenter';
 import { aiContextService } from '../services/aiContextService';
 import { askClinicOperationsAi } from '../services/aiService';
 import { isAppointmentToday, formatToPersianDate } from '../utils/dateUtils';
-import { Send, Bot, RefreshCw } from 'lucide-react';
+import { Send, Bot, RefreshCw, Camera, Upload, Crop, Check } from 'lucide-react';
 
 export const DoctorDashboardPage: React.FC = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, updateCurrentUser } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab') as 'clinical' | 'tasks' | 'website' | null;
   const [activeTab, setActiveTab] = useState<'clinical' | 'tasks' | 'website'>(tabParam || 'clinical');
@@ -56,6 +58,67 @@ export const DoctorDashboardPage: React.FC = () => {
   const [records, setRecords] = useState<MedicalRecord[]>([]);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [isClinicalModalOpen, setIsClinicalModalOpen] = useState(false);
+
+  // Avatar upload and crop modal states
+  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
+  const [isCropperOpen, setIsCropperOpen] = useState(false);
+  const [selectedImageForCrop, setSelectedImageForCrop] = useState<string | null>(null);
+  const [isUpdatingPhoto, setIsUpdatingPhoto] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('لطفاً یک فایل تصویری معتبر (JPG، PNG، WebP) انتخاب فرمایید.');
+      return;
+    }
+
+    if (file.size > 8 * 1024 * 1024) {
+      alert('حداکثر حجم تصویر ۸ مگابایت است.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = reader.result as string;
+      setSelectedImageForCrop(base64);
+      setIsCropperOpen(true);
+    };
+    reader.readAsDataURL(file);
+
+    // Reset input to allow selecting same file again
+    e.target.value = '';
+  };
+
+  const handleCropComplete = async (croppedBase64: string) => {
+    if (!doctor) return;
+    setIsUpdatingPhoto(true);
+    try {
+      const updated = await apiService.updateDoctor(doctor.id, { avatar: croppedBase64 });
+      if (updated) {
+        setDoctor(updated);
+        setAllDoctors(prev => prev.map(d => d.id === updated.id ? updated : d));
+      }
+      if (currentUser?.id === doctor.id || currentUser?.role === 'doctor') {
+        await updateCurrentUser({ avatar: croppedBase64 });
+      }
+      setIsAvatarModalOpen(false);
+    } catch (err) {
+      console.error('Error updating doctor avatar:', err);
+    } finally {
+      setIsUpdatingPhoto(false);
+    }
+  };
+
+  const handleOpenCurrentForCrop = () => {
+    const currentAvatar = doctor?.avatar || currentUser?.avatar;
+    if (currentAvatar) {
+      setSelectedImageForCrop(currentAvatar);
+      setIsCropperOpen(true);
+    }
+  };
 
   // Initialize available doctors
   useEffect(() => {
@@ -230,14 +293,26 @@ export const DoctorDashboardPage: React.FC = () => {
       {/* Physician Header */}
       <div className="bg-slate-900 text-white rounded-3xl p-6 sm:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-xl border border-slate-800">
         <div className="flex items-center gap-4">
-          <img
-            src={doctor?.avatar || currentUser.avatar || "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=300"}
-            alt={doctor?.name || currentUser.name}
-            className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-blue-400 shrink-0"
-          />
+          <div 
+            onClick={() => setIsAvatarModalOpen(true)}
+            className="relative group cursor-pointer"
+            title="کلیک برای تغییر، برش و ویرایش تصویر پزشک"
+          >
+            <img
+              src={doctor?.avatar || currentUser?.avatar || "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=300"}
+              alt={doctor?.name || currentUser?.name || "پزشک"}
+              className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-blue-400 shrink-0 group-hover:border-blue-300 transition-all shadow-md group-hover:shadow-blue-500/20"
+            />
+            <div className="absolute inset-0 bg-black/40 rounded-2xl opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white backdrop-blur-[1px]">
+              <Camera className="w-6 h-6 drop-shadow-md" />
+            </div>
+            <span className="absolute -bottom-1 -right-1 bg-blue-600 hover:bg-blue-500 text-white rounded-full p-1 border-2 border-slate-900 shadow-xs transition-colors">
+              <Crop className="w-3 h-3" />
+            </span>
+          </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl sm:text-2xl font-extrabold text-white">اتاق کار و پرتال بالینی {doctor?.name || currentUser.name}</h1>
+              <h1 className="text-xl sm:text-2xl font-extrabold text-white">اتاق کار و پرتال بالینی {doctor?.name || currentUser?.name}</h1>
               <Badge variant="blue">پزشک تایید شده</Badge>
             </div>
             <p className="text-xs text-blue-300 mt-1">
@@ -737,8 +812,121 @@ export const DoctorDashboardPage: React.FC = () => {
           onClose={() => setIsClinicalModalOpen(false)}
           appointment={selectedAppointment}
           records={records}
+          onPrescriptionSaved={(savedRecord) => {
+            setRecords(prev => [savedRecord, ...prev]);
+          }}
         />
       )}
+
+      {/* Hidden File Input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileUpload}
+        accept="image/*"
+        className="hidden"
+      />
+
+      {/* Doctor Profile Photo Upload / Edit Modal */}
+      <Modal
+        isOpen={isAvatarModalOpen}
+        onClose={() => setIsAvatarModalOpen(false)}
+        title={`تنظیم، ویرایش و برش تصویر پرتره ${doctor?.name || currentUser?.name || 'پزشک'}`}
+      >
+        <div className="space-y-6 text-slate-800">
+          {/* Current Profile Preview */}
+          <div className="flex flex-col items-center justify-center p-4 bg-slate-50 rounded-2xl border border-slate-200/80 text-center">
+            <div className="relative">
+              <img
+                src={doctor?.avatar || currentUser?.avatar || "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=300"}
+                alt={doctor?.name || currentUser?.name || 'پزشک'}
+                className="w-24 h-24 rounded-2xl object-cover border-4 border-white shadow-lg mx-auto"
+              />
+              <span className="absolute bottom-0 right-0 bg-blue-600 text-white p-1 rounded-full border-2 border-white shadow-xs">
+                <Check className="w-3 h-3" />
+              </span>
+            </div>
+            <div className="mt-2.5 space-y-0.5">
+              <p className="font-bold text-sm text-slate-900">{doctor?.name || currentUser?.name}</p>
+              <p className="text-xs text-slate-500 font-mono">{doctor?.title || 'متخصص کلینیک'}</p>
+            </div>
+            {/* Quick Edit Current Image Button */}
+            {(doctor?.avatar || currentUser?.avatar) && (
+              <button
+                type="button"
+                onClick={handleOpenCurrentForCrop}
+                className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors border border-blue-200/80 cursor-pointer shadow-2xs active:scale-95"
+              >
+                <Crop className="w-3.5 h-3.5 text-blue-600" />
+                <span>ویرایش و برش کادر تصویر فعلی</span>
+              </button>
+            )}
+          </div>
+
+          {/* Upload From Device */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+              <Upload className="w-4 h-4 text-blue-600" />
+              بارگذاری تصویر جدید با امکان ویرایش، چرخش و برش دقیق:
+            </label>
+            
+            <div 
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed border-blue-200 hover:border-blue-500 bg-blue-50/40 hover:bg-blue-50 rounded-2xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 group active:scale-[0.99]"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-blue-100 group-hover:bg-blue-600 group-hover:text-white text-blue-600 flex items-center justify-center transition-colors shadow-xs">
+                <Camera className="w-6 h-6" />
+              </div>
+              <div className="text-xs">
+                <span className="font-bold text-blue-700 hover:underline">برای انتخاب تصویر از دستگاه کلیک کنید</span>
+                <p className="text-[11px] text-slate-500 mt-1">امکان جابجایی، بزرگ‌نمایی، چرخش افقی و کادربندی پرتره</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">فرمت‌های مجاز: JPG, PNG, WebP (حداکثر ۸ مگابایت)</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center justify-between gap-2 pt-4 border-t border-slate-100">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsAvatarModalOpen(false)}
+            >
+              انصراف
+            </Button>
+            <div className="flex items-center gap-2">
+              {(doctor?.avatar || currentUser?.avatar) && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<Crop className="w-4 h-4 text-blue-600" />}
+                  onClick={handleOpenCurrentForCrop}
+                >
+                  ویرایش کادر فعلی
+                </Button>
+              )}
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<Camera className="w-4 h-4" />}
+                isLoading={isUpdatingPhoto}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                انتخاب عکس جدید
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Image Cropper Modal */}
+      <ImageCropperModal
+        isOpen={isCropperOpen}
+        onClose={() => setIsCropperOpen(false)}
+        imageSrc={selectedImageForCrop}
+        onCropComplete={handleCropComplete}
+        title="ویرایش، تنظیم کادر و برش تصویر پزشک"
+      />
     </div>
   );
 };

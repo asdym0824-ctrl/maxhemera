@@ -527,7 +527,7 @@ export const AdvancedSearchConsole: React.FC<AdvancedSearchConsoleProps> = ({
         <div className="flex items-center justify-between py-1 cursor-pointer" onClick={() => setShowMoreFilters(!showMoreFilters)}>
           <span className="text-xs font-extrabold text-slate-300 flex items-center gap-2">
             <Filter className="w-3.5 h-3.5 text-blue-400" />
-            <span>ویژگی‌های تکمیلی (جنسیت پزشک، رتبه علمی، ساب‌دامنه همرا و خدمات دیجیتال)</span>
+            <span>ویژگی‌های تکمیلی (جنسیت پزشک و رتبه علمی)</span>
           </span>
           <button
             type="button"
@@ -539,7 +539,7 @@ export const AdvancedSearchConsole: React.FC<AdvancedSearchConsoleProps> = ({
         </div>
 
         {showMoreFilters && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3">
             {/* Gender */}
             <div className="space-y-1">
               <label className="text-[11px] font-bold text-slate-400 block">جنسیت پزشک:</label>
@@ -577,22 +577,6 @@ export const AdvancedSearchConsole: React.FC<AdvancedSearchConsoleProps> = ({
                 <option value="fellowship">فقط فوق تخصص و فلوشیپ</option>
                 <option value="experience10">بیش از ۱۰ سال سابقه بالینی</option>
               </select>
-            </div>
-
-            {/* Digital capabilities */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-bold text-slate-400 block">خدمات دیجیتال و برندینگ:</label>
-              <div className="flex flex-col gap-1.5 text-xs">
-                <label className="flex items-center gap-2 text-slate-300 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={hasSubdomain}
-                    onChange={e => setHasSubdomain(e.target.checked)}
-                    className="w-4 h-4 rounded-sm bg-slate-950 border-slate-700 text-purple-600 focus:ring-0 cursor-pointer"
-                  />
-                  <span>دارای سایت و ساب‌دامنه اختصاصی همرا (<span className="text-purple-300 font-mono text-[10px]" dir="ltr">*.hamrah.ir</span>)</span>
-                </label>
-              </div>
             </div>
           </div>
         )}

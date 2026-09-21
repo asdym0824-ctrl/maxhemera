@@ -36,6 +36,7 @@ import {
   Camera,
   Upload,
   Check,
+  Crop,
   Image as ImageIcon,
   FileText
 } from 'lucide-react';
@@ -44,6 +45,7 @@ import { UserRole, Doctor } from '../../types';
 import { Button } from '../common/Button';
 import { Badge } from '../common/Badge';
 import { Modal } from '../common/Modal';
+import { ImageCropperModal } from '../common/ImageCropperModal';
 import { DEMO_MODE } from '../../config';
 import { NearestBranchModal } from '../branches/NearestBranchModal';
 import { InsuranceFinderModal } from '../insurance/InsuranceFinderModal';
@@ -83,6 +85,8 @@ export const Header: React.FC<HeaderProps> = ({
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [avatarSuccessMsg, setAvatarSuccessMsg] = useState(false);
+  const [isCropperOpen, setIsCropperOpen] = useState(false);
+  const [selectedImageForCrop, setSelectedImageForCrop] = useState<string | null>(null);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -107,22 +111,42 @@ export const Header: React.FC<HeaderProps> = ({
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      alert('حداکثر حجم تصویر ۵ مگابایت است.');
+    if (file.size > 8 * 1024 * 1024) {
+      alert('حداکثر حجم تصویر ۸ مگابایت است.');
       return;
     }
 
-    setIsUploadingPhoto(true);
     const reader = new FileReader();
-    reader.onload = async () => {
+    reader.onload = () => {
       const base64 = reader.result as string;
-      await updateCurrentUser({ avatar: base64 });
-      setIsUploadingPhoto(false);
+      setSelectedImageForCrop(base64);
+      setIsCropperOpen(true);
+    };
+    reader.readAsDataURL(file);
+
+    // Reset input to allow re-selecting same file
+    e.target.value = '';
+  };
+
+  const handleCropComplete = async (croppedBase64: string) => {
+    setIsUploadingPhoto(true);
+    try {
+      await updateCurrentUser({ avatar: croppedBase64 });
       setAvatarSuccessMsg(true);
       setTimeout(() => setAvatarSuccessMsg(false), 3000);
       setIsAvatarModalOpen(false);
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Failed to update avatar:', err);
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
+  const handleOpenCurrentForCrop = () => {
+    if (currentUser?.avatar) {
+      setSelectedImageForCrop(currentUser.avatar);
+      setIsCropperOpen(true);
+    }
   };
 
   const handleSelectPreset = async (presetUrl: string) => {
@@ -209,7 +233,7 @@ export const Header: React.FC<HeaderProps> = ({
       <Modal
         isOpen={isAvatarModalOpen}
         onClose={() => setIsAvatarModalOpen(false)}
-        title="تغییر و بارگذاری تصویر پروفایل"
+        title="تغییر، ویرایش و برش تصویر پروفایل"
       >
         <div className="space-y-6 text-slate-800">
           {/* Current Profile Preview */}
@@ -220,33 +244,45 @@ export const Header: React.FC<HeaderProps> = ({
                 alt={currentUser?.name || 'کاربر'}
                 className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border-4 border-white shadow-lg mx-auto"
               />
-              <span className="absolute bottom-0 right-0 bg-blue-600 text-white p-1 rounded-full border-2 border-white">
+              <span className="absolute bottom-0 right-0 bg-blue-600 text-white p-1 rounded-full border-2 border-white shadow-xs">
                 <Check className="w-3 h-3" />
               </span>
             </div>
-            <div className="mt-2.5">
+            <div className="mt-2.5 space-y-0.5">
               <p className="font-bold text-sm text-slate-900">{currentUser?.name}</p>
               <p className="text-xs text-slate-500 font-mono">{currentUser?.phone}</p>
             </div>
+            {/* Quick Edit Current Image Button */}
+            {currentUser?.avatar && (
+              <button
+                type="button"
+                onClick={handleOpenCurrentForCrop}
+                className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors border border-blue-200/80 cursor-pointer shadow-2xs active:scale-95"
+              >
+                <Crop className="w-3.5 h-3.5 text-blue-600" />
+                <span>ویرایش و برش کادر تصویر فعلی</span>
+              </button>
+            )}
           </div>
 
           {/* Upload From Device / Camera */}
           <div className="space-y-2">
             <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
               <Upload className="w-4 h-4 text-blue-600" />
-              بارگذاری عکس با دوربین گوشی یا از گالری:
+              بارگذاری عکس با قابلیت برش و تنظیم کادر:
             </label>
             
             <div 
               onClick={() => fileInputRef.current?.click()}
               className="border-2 border-dashed border-blue-200 hover:border-blue-500 bg-blue-50/40 hover:bg-blue-50 rounded-2xl p-5 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 group active:scale-[0.99]"
             >
-              <div className="w-12 h-12 rounded-2xl bg-blue-100 group-hover:bg-blue-600 group-hover:text-white text-blue-600 flex items-center justify-center transition-colors">
+              <div className="w-12 h-12 rounded-2xl bg-blue-100 group-hover:bg-blue-600 group-hover:text-white text-blue-600 flex items-center justify-center transition-colors shadow-xs">
                 <Camera className="w-6 h-6" />
               </div>
               <div className="text-xs">
-                <span className="font-bold text-blue-700 hover:underline">برای گرفتن عکس یا انتخاب از گالری لمس کنید</span>
-                <p className="text-[11px] text-slate-400 mt-1">فرمت‌های مجاز: JPG, PNG, WebP (حداکثر ۵ مگابایت)</p>
+                <span className="font-bold text-blue-700 hover:underline">برای گرفتن عکس یا انتخاب و ویرایش تصویر لمس کنید</span>
+                <p className="text-[11px] text-slate-500 mt-1">امکان جابجایی، بزرگ‌نمایی و چرخش کادر عکس به دلخواه</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">فرمت‌های مجاز: JPG, PNG, WebP (حداکثر ۸ مگابایت)</p>
               </div>
             </div>
           </div>
@@ -285,7 +321,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
+          <div className="flex items-center justify-between gap-2 pt-4 border-t border-slate-100">
             <Button
               variant="outline"
               size="sm"
@@ -293,18 +329,39 @@ export const Header: React.FC<HeaderProps> = ({
             >
               انصراف
             </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              icon={<Camera className="w-4 h-4" />}
-              isLoading={isUploadingPhoto}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              انتخاب / گرفتن عکس
-            </Button>
+            <div className="flex items-center gap-2">
+              {currentUser?.avatar && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<Crop className="w-4 h-4 text-blue-600" />}
+                  onClick={handleOpenCurrentForCrop}
+                >
+                  ویرایش فعلی
+                </Button>
+              )}
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<Camera className="w-4 h-4" />}
+                isLoading={isUploadingPhoto}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                انتخاب و ویرایش عکس
+              </Button>
+            </div>
           </div>
         </div>
       </Modal>
+
+      {/* Image Cropper Modal */}
+      <ImageCropperModal
+        isOpen={isCropperOpen}
+        onClose={() => setIsCropperOpen(false)}
+        imageSrc={selectedImageForCrop}
+        onCropComplete={handleCropComplete}
+        title="ویرایش، تنظیم کادر و برش تصویر"
+      />
     </>
   );
 

@@ -25,6 +25,13 @@ export const DoctorCompactCard: React.FC<DoctorCompactCardProps> = ({
           <img
             src={doctor.avatar}
             alt={doctor.name}
+            referrerPolicy="no-referrer"
+            onError={(e) => {
+              const target = e.currentTarget as HTMLImageElement;
+              if (!target.src.includes('photo-1559839734')) {
+                target.src = 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=300';
+              }
+            }}
             className="w-13 h-13 rounded-2xl object-cover border border-slate-100 shadow-2xs group-hover:scale-105 transition-transform"
           />
           {doctor.hasOnlineConsultation && (

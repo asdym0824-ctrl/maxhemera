@@ -1,7 +1,7 @@
-import { Appointment } from '../types';
+import { Appointment, MedicalRecord } from '../types';
 
 export interface RealtimeMessage {
-  type: 'APPOINTMENT_CREATED' | 'APPOINTMENT_STATUS_UPDATED' | 'TASK_CREATED' | 'ACTIVITY_LOGGED';
+  type: 'APPOINTMENT_CREATED' | 'APPOINTMENT_STATUS_UPDATED' | 'TASK_CREATED' | 'ACTIVITY_LOGGED' | 'MEDICAL_RECORD_CREATED';
   payload: any;
   timestamp: string;
   senderId?: string;
@@ -57,7 +57,64 @@ class RealtimeSyncService {
       window.dispatchEvent(new CustomEvent('synapse_appointments_updated', { detail: msg.payload }));
     } else if (msg.type === 'TASK_CREATED') {
       window.dispatchEvent(new CustomEvent('synapse_tasks_updated', { detail: msg.payload }));
+    } else if (msg.type === 'MEDICAL_RECORD_CREATED') {
+      const record = msg.payload as MedicalRecord;
+      window.dispatchEvent(new CustomEvent('synapse_medical_records_updated', { detail: record }));
+      window.dispatchEvent(new CustomEvent('synapse_activity_updated'));
     }
+  }
+
+  /**
+   * Broadcast newly created medical record / prescription to all tabs and views in real-time
+   */
+  public publishMedicalRecordCreated(record: MedicalRecord) {
+    if (typeof window === 'undefined') return;
+
+    const message: RealtimeMessage = {
+      type: 'MEDICAL_RECORD_CREATED',
+      payload: record,
+      timestamp: new Date().toISOString(),
+      senderId: this.instanceId
+    };
+
+    // 1. BroadcastChannel for active tabs
+    if (this.channel) {
+      try {
+        this.channel.postMessage(message);
+      } catch (e) {
+        console.warn('Failed to post via BroadcastChannel:', e);
+      }
+    }
+
+    // 2. Storage event for cross-tab fallback
+    try {
+      localStorage.setItem('synapse_last_realtime_event', JSON.stringify(message));
+    } catch {
+      // Storage quota or restriction
+    }
+
+    // 3. Local in-tab events
+    window.dispatchEvent(new CustomEvent('synapse_medical_records_updated', { detail: record }));
+    window.dispatchEvent(new CustomEvent('synapse_activity_updated'));
+  }
+
+  /**
+   * Subscribe to real-time medical records / prescription creation
+   */
+  public subscribeToMedicalRecords(callback: (record: MedicalRecord) => void): () => void {
+    if (typeof window === 'undefined') return () => {};
+
+    const handler = (e: Event) => {
+      const customEvent = e as CustomEvent<MedicalRecord>;
+      if (customEvent.detail) {
+        callback(customEvent.detail);
+      }
+    };
+
+    window.addEventListener('synapse_medical_records_updated', handler);
+    return () => {
+      window.removeEventListener('synapse_medical_records_updated', handler);
+    };
   }
 
   /**

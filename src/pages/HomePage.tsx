@@ -372,7 +372,7 @@ export const HomePage: React.FC<HomePageProps> = ({
               }`}
             >
               <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-              <span>استعلام بیمه من</span>
+              <span>بیمه‌ها</span>
             </button>
 
             <button
