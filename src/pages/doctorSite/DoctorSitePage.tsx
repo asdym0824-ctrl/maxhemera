@@ -40,6 +40,7 @@ import { DoctorSiteFooter } from '../../components/doctorSite/DoctorSiteFooter';
 import { DoctorSiteFloatingAssistant } from '../../components/doctorSite/DoctorSiteFloatingAssistant';
 import { DoctorSiteMiniAccountModal } from '../../components/doctorSite/DoctorSiteMiniAccountModal';
 import { MobileDoctorSiteView } from '../../components/doctorSite/MobileDoctorSiteView';
+import { DrSahandTaeiSite } from '../../components/doctorSite/themes/DrSahandTaeiSite';
 import { AppointmentWizard } from '../../components/appointments/AppointmentWizard';
 import { MOCK_DISEASES } from '../../data/mockData';
 import { bookingIntentService } from '../../services/bookingIntentService';
@@ -403,6 +404,43 @@ export const DoctorSitePage: React.FC = () => {
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  // Bespoke VIP Luxury Theme for Dr. Sahand Taei (matching https://drsahandtaei.com/)
+  if (doctor.websiteConfig?.theme === 'drsahandtaei-luxury' || doctor.id === 'doc-sahand-taei' || doctor.slug === 'dr-sahand-taei') {
+    return (
+      <div className="min-h-screen" dir="rtl">
+        <DoctorSiteStructuredData 
+          doctor={doctor} 
+          subpage={subpage}
+          service={selectedService || undefined}
+          condition={selectedCondition || undefined}
+          article={selectedArticle || undefined}
+        />
+        <DrSahandTaeiSite
+          doctor={doctor}
+          onOpenBookingModal={(serviceTitle, officeTitle) => handleOpenBooking(serviceTitle, officeTitle)}
+        />
+        {/* Universal Booking Wizard Modal when triggered */}
+        {isBookingOpen && (
+          <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6 shadow-2xl relative">
+              <button
+                onClick={() => setIsBookingOpen(false)}
+                className="absolute top-4 left-4 p-2 rounded-full hover:bg-slate-100 text-slate-500 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <AppointmentWizard
+                preselectedDoctorId={doctor.id}
+                onSuccess={() => setIsBookingOpen(false)}
+                onCancel={() => setIsBookingOpen(false)}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white text-slate-900 antialiased font-sans flex flex-col justify-between" dir="rtl">

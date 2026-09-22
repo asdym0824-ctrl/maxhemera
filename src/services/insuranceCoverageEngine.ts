@@ -228,6 +228,53 @@ export function matchesBranchInsuranceSelection(
 }
 
 /**
+ * Checks if supported insurances match ANY of the target insurances
+ */
+export function supportsAnyInsurance(supportedInsurances: string[] | undefined, targetInsurances: string[]): boolean {
+  if (!targetInsurances || targetInsurances.length === 0) return true;
+  return targetInsurances.some(t => supportsInsurance(supportedInsurances, t));
+}
+
+/**
+ * Checks if supported insurances match ALL of the target insurances
+ */
+export function supportsAllInsurances(supportedInsurances: string[] | undefined, targetInsurances: string[]): boolean {
+  if (!targetInsurances || targetInsurances.length === 0) return true;
+  return targetInsurances.every(t => supportsInsurance(supportedInsurances, t));
+}
+
+/**
+ * Returns which target insurances are accepted
+ */
+export function getMatchingInsurances(supportedInsurances: string[] | undefined, targetInsurances: string[]): string[] {
+  if (!targetInsurances || targetInsurances.length === 0) return [];
+  return targetInsurances.filter(t => supportsInsurance(supportedInsurances, t));
+}
+
+/**
+ * Calculates best coverage given multiple selected insurances
+ */
+export function calculateMultiInsuranceCoverage(
+  baseFee: number,
+  selectedInsurances: string[]
+): InsuranceCoverageCalculationResult {
+  const safeFee = Math.max(0, Math.round(Number(baseFee) || 0));
+  if (!selectedInsurances || selectedInsurances.length === 0) {
+    return calculateDemoCoverage(safeFee, null, null);
+  }
+
+  // Find all basic insurances in selection and pick the one with highest coverage
+  const resolved = selectedInsurances.map(s => resolveInsuranceCompany(s)).filter((x): x is InsuranceCompany => Boolean(x));
+  const basicList = resolved.filter(i => i.type === 'basic');
+  const suppList = resolved.filter(i => i.type === 'supplementary' || i.type === 'specialized');
+
+  const bestBasic = basicList.sort((a, b) => b.coverageCoPayPercent - a.coverageCoPayPercent)[0];
+  const bestSupp = suppList.sort((a, b) => b.coverageCoPayPercent - a.coverageCoPayPercent)[0];
+
+  return calculateDemoCoverage(safeFee, bestBasic?.name, bestSupp?.name);
+}
+
+/**
  * Calculates demo coverage with consistent formula
  */
 export function calculateDemoCoverage(

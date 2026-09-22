@@ -86,6 +86,23 @@ export const THEME_CONFIGS: Record<DoctorWebsiteTheme, ThemeStyles> = {
     accentIconColor: 'text-sky-600',
     sectionHeadingClass: 'text-slate-900 font-black',
     footerBg: 'bg-slate-950 text-slate-300'
+  },
+  'drsahandtaei-luxury': {
+    id: 'drsahandtaei-luxury',
+    name: 'کلینیک پوست و مو دکتر طائی (Gold & Navy)',
+    description: 'تم اختصاصی کلینیک زیبایی دکتر سهند طائی با تم سرمه‌ای تیره لوکس، اکسنت طلایی، هدر چسبان و ویدیوهای پیشرفته',
+    heroBg: 'bg-[#faf9f6] dark:bg-[#04070f]',
+    heroText: 'text-gray-900 dark:text-white',
+    heroBadgeBg: 'bg-[#c9a227]/15 border border-[#c9a227]/30 text-[#c9a227] font-bold',
+    badgeBg: 'bg-[#c9a227]/10 border border-[#c9a227]/25 text-[#a88219] font-bold',
+    badgeText: 'text-[#c9a227]',
+    primaryButton: 'bg-[#c9a227] hover:bg-[#e0ba3d] text-[#0f2350] font-extrabold shadow-lg shadow-[#c9a227]/25 transition-all',
+    secondaryButton: 'bg-white/10 hover:bg-white/20 text-white border border-white/25 transition-all',
+    cardBg: 'bg-white dark:bg-[#0a1428] hover:shadow-2xl transition-all',
+    cardBorder: 'border border-white/10',
+    accentIconColor: 'text-[#c9a227]',
+    sectionHeadingClass: 'text-gray-900 dark:text-white font-extrabold',
+    footerBg: 'bg-[#04070f] text-white'
   }
 };
 

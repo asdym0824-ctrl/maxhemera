@@ -2,6 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Doctor, Specialty, ClinicBranch } from '../../types';
 import { MOCK_INSURANCES } from '../../data/mockData';
+import { IRAN_PROVINCES, isDoctorInProvince, getShortProvinceName } from '../../data/provinces';
+import { MultiSelectDropdown, MultiSelectOption } from './MultiSelectDropdown';
 import { 
   Search, 
   Filter, 
@@ -27,16 +29,22 @@ import {
   FileText, 
   Star,
   CheckCircle2,
-  ExternalLink
+  ExternalLink,
+  MapPin
 } from 'lucide-react';
 import { formatToman } from '../../utils/currencyUtils';
 
 export interface AdvancedSearchFilters {
   searchQuery: string;
   specialtyId: string;
+  selectedSpecialties?: string[];
   branchId: string;
+  selectedBranches?: string[];
+  province?: string;
+  selectedProvinces?: string[];
   visitType: 'all' | 'in_person' | 'online' | 'phone';
   insurance: string;
+  selectedInsurances?: string[];
   timing: 'all' | 'today' | 'tomorrow' | '3days' | 'evening';
   gender: 'all' | 'female' | 'male';
   seniority: 'all' | 'fellowship' | 'specialist' | 'experience10';
@@ -65,14 +73,52 @@ export const AdvancedSearchConsole: React.FC<AdvancedSearchConsoleProps> = ({
 }) => {
   const navigate = useNavigate();
 
-  // Filters State
+  // Filters State - Multi-select enabled
   const [searchQuery, setSearchQuery] = useState(initialFilters?.searchQuery || '');
-  const [specialtyId, setSpecialtyId] = useState(initialFilters?.specialtyId || '');
-  const [branchId, setBranchId] = useState(initialFilters?.branchId || '');
+  
+  const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>(() => {
+    if (initialFilters?.selectedSpecialties && initialFilters.selectedSpecialties.length > 0) {
+      return initialFilters.selectedSpecialties;
+    }
+    if (initialFilters?.specialtyId) {
+      return initialFilters.specialtyId.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    return [];
+  });
+
+  const [selectedProvinces, setSelectedProvinces] = useState<string[]>(() => {
+    if (initialFilters?.selectedProvinces && initialFilters.selectedProvinces.length > 0) {
+      return initialFilters.selectedProvinces;
+    }
+    if (initialFilters?.province) {
+      return initialFilters.province.split(',').map(p => p.trim()).filter(Boolean);
+    }
+    return [];
+  });
+
+  const [selectedBranches, setSelectedBranches] = useState<string[]>(() => {
+    if (initialFilters?.selectedBranches && initialFilters.selectedBranches.length > 0) {
+      return initialFilters.selectedBranches;
+    }
+    if (initialFilters?.branchId) {
+      return initialFilters.branchId.split(',').map(b => b.trim()).filter(Boolean);
+    }
+    return [];
+  });
+
+  const [selectedInsurances, setSelectedInsurances] = useState<string[]>(() => {
+    if (initialFilters?.selectedInsurances && initialFilters.selectedInsurances.length > 0) {
+      return initialFilters.selectedInsurances;
+    }
+    if (initialFilters?.insurance) {
+      return initialFilters.insurance.split(',').map(i => i.trim()).filter(Boolean);
+    }
+    return [];
+  });
+
   const [visitType, setVisitType] = useState<'all' | 'in_person' | 'online' | 'phone'>(
     initialFilters?.visitType || 'all'
   );
-  const [insurance, setInsurance] = useState(initialFilters?.insurance || '');
   const [timing, setTiming] = useState<'all' | 'today' | 'tomorrow' | '3days' | 'evening'>(
     initialFilters?.timing || 'all'
   );
@@ -93,14 +139,51 @@ export const AdvancedSearchConsole: React.FC<AdvancedSearchConsoleProps> = ({
   const [showQuickResults, setShowQuickResults] = useState(false);
   const [showMoreFilters, setShowMoreFilters] = useState(true);
 
+  // Multi-select Options definitions
+  const provinceOptions: MultiSelectOption[] = useMemo(() => {
+    return IRAN_PROVINCES.map(prov => {
+      const docCount = doctors.filter(d => isDoctorInProvince(d, prov)).length;
+      return {
+        value: prov,
+        label: prov,
+        badge: docCount > 0 ? `${docCount} پزشک` : undefined
+      };
+    });
+  }, [doctors]);
+
+  const specialtyOptions: MultiSelectOption[] = useMemo(() => {
+    return specialties.map(s => ({
+      value: s.id,
+      label: s.name,
+      badge: `${s.doctorCount} پزشک`
+    }));
+  }, [specialties]);
+
+  const branchOptions: MultiSelectOption[] = useMemo(() => {
+    return branches.map(b => ({
+      value: b.id,
+      label: b.name,
+      badge: `${b.city} - ${b.isOpenNow ? 'پذیرش فعال' : 'شبانه‌روزی'}`
+    }));
+  }, [branches]);
+
+  const insuranceOptions: MultiSelectOption[] = useMemo(() => {
+    return MOCK_INSURANCES.map(ins => ({
+      value: ins.name,
+      label: ins.name,
+      group: ins.type === 'basic' ? 'بیمه‌های پایه' : 'بیمه‌های تکمیلی'
+    }));
+  }, []);
+
   // Active filters count calculation
   const activeFiltersCount = useMemo(() => {
     let count = 0;
     if (searchQuery.trim()) count++;
-    if (specialtyId) count++;
-    if (branchId) count++;
+    if (selectedSpecialties.length > 0) count++;
+    if (selectedProvinces.length > 0) count++;
+    if (selectedBranches.length > 0) count++;
     if (visitType !== 'all') count++;
-    if (insurance) count++;
+    if (selectedInsurances.length > 0) count++;
     if (timing !== 'all') count++;
     if (gender !== 'all') count++;
     if (seniority !== 'all') count++;
@@ -111,10 +194,11 @@ export const AdvancedSearchConsole: React.FC<AdvancedSearchConsoleProps> = ({
     return count;
   }, [
     searchQuery,
-    specialtyId,
-    branchId,
+    selectedSpecialties,
+    selectedProvinces,
+    selectedBranches,
     visitType,
-    insurance,
+    selectedInsurances,
     timing,
     gender,
     seniority,
@@ -139,34 +223,41 @@ export const AdvancedSearchConsole: React.FC<AdvancedSearchConsoleProps> = ({
         }
       }
 
-      // 2. Specialty
-      if (specialtyId && doc.specialtyId !== specialtyId) {
+      // 2. Specialty (Multi-select)
+      if (selectedSpecialties.length > 0 && !selectedSpecialties.includes(doc.specialtyId)) {
         return false;
       }
 
-      // 3. Branch
-      if (branchId) {
-        if (doc.branchId && doc.branchId !== branchId) {
+      // 3. Province (Multi-select)
+      if (selectedProvinces.length > 0 && !selectedProvinces.some(p => isDoctorInProvince(doc, p))) {
+        return false;
+      }
+
+      // 4. Branch (Multi-select)
+      if (selectedBranches.length > 0) {
+        if (doc.branchId && !selectedBranches.includes(doc.branchId)) {
           return false;
         }
       }
 
-      // 4. Visit Type
+      // 5. Visit Type
       if (visitType === 'online' && !doc.hasOnlineConsultation) {
         return false;
       }
 
-      // 5. Insurance
-      if (insurance) {
+      // 6. Insurance (Multi-select)
+      if (selectedInsurances.length > 0) {
         const docInsurances = doc.supportedInsurances || [];
-        const matchesIns = docInsurances.some(i => 
-          i.toLowerCase().includes(insurance.toLowerCase()) || 
-          insurance.toLowerCase().includes(i.toLowerCase())
+        const matchesIns = selectedInsurances.some(selIns =>
+          docInsurances.some(i => 
+            i.toLowerCase().includes(selIns.toLowerCase()) || 
+            selIns.toLowerCase().includes(i.toLowerCase())
+          )
         );
         if (!matchesIns) return false;
       }
 
-      // 6. Timing / Slot
+      // 7. Timing / Slot
       if (timing === 'today') {
         const slot = doc.nextAvailableSlot || '';
         if (!slot.includes('امروز')) return false;
@@ -179,12 +270,12 @@ export const AdvancedSearchConsole: React.FC<AdvancedSearchConsoleProps> = ({
         if (!hasEveningHour) return false;
       }
 
-      // 7. Gender
+      // 8. Gender
       if (gender !== 'all' && doc.gender !== gender) {
         return false;
       }
 
-      // 8. Seniority
+      // 9. Seniority
       if (seniority === 'fellowship') {
         const isFellow = doc.title && (doc.title.includes('فوق تخصص') || doc.title.includes('فلوشیپ'));
         if (!isFellow) return false;
@@ -192,7 +283,7 @@ export const AdvancedSearchConsole: React.FC<AdvancedSearchConsoleProps> = ({
         if (doc.experienceYears < 10) return false;
       }
 
-      // 9. Subdomain
+      // 10. Subdomain
       if (hasSubdomain) {
         if (!doc.websiteSubdomain && doc.websiteConfig?.websiteStatus !== 'published') {
           return false;
@@ -215,10 +306,11 @@ export const AdvancedSearchConsole: React.FC<AdvancedSearchConsoleProps> = ({
   }, [
     doctors,
     searchQuery,
-    specialtyId,
-    branchId,
+    selectedSpecialties,
+    selectedProvinces,
+    selectedBranches,
     visitType,
-    insurance,
+    selectedInsurances,
     timing,
     gender,
     seniority,
@@ -229,10 +321,11 @@ export const AdvancedSearchConsole: React.FC<AdvancedSearchConsoleProps> = ({
   // Reset all filters
   const handleReset = () => {
     setSearchQuery('');
-    setSpecialtyId('');
-    setBranchId('');
+    setSelectedSpecialties([]);
+    setSelectedProvinces([]);
+    setSelectedBranches([]);
     setVisitType('all');
-    setInsurance('');
+    setSelectedInsurances([]);
     setTiming('all');
     setGender('all');
     setSeniority('all');
@@ -246,11 +339,12 @@ export const AdvancedSearchConsole: React.FC<AdvancedSearchConsoleProps> = ({
   const handleApplyAndSearch = () => {
     const params = new URLSearchParams();
     if (searchQuery.trim()) params.set('search', searchQuery.trim());
-    if (specialtyId) params.set('specialtyId', specialtyId);
-    if (branchId) params.set('branchId', branchId);
+    if (selectedSpecialties.length > 0) params.set('specialtyId', selectedSpecialties.join(','));
+    if (selectedProvinces.length > 0) params.set('province', selectedProvinces.join(','));
+    if (selectedBranches.length > 0) params.set('branchId', selectedBranches.join(','));
     if (visitType === 'online') params.set('hasOnline', 'true');
     if (visitType !== 'all') params.set('visitType', visitType);
-    if (insurance) params.set('insurance', insurance);
+    if (selectedInsurances.length > 0) params.set('insurance', selectedInsurances.join(','));
     if (timing !== 'all') params.set('timing', timing);
     if (gender !== 'all') params.set('gender', gender);
     if (seniority !== 'all') params.set('seniority', seniority);
@@ -338,78 +432,61 @@ export const AdvancedSearchConsole: React.FC<AdvancedSearchConsoleProps> = ({
         </div>
       </div>
 
-      {/* Grid of Core Filters */}
+      {/* Grid of Core Filters - Multi-Select Enabled */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {/* 1. Medical Specialty */}
-        <div className="space-y-1.5">
-          <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-            <Stethoscope className="w-3.5 h-3.5 text-blue-400" />
-            <span>تخصص و دپارتمان پزشکی:</span>
-          </label>
-          <select
-            value={specialtyId}
-            onChange={e => setSpecialtyId(e.target.value)}
-            className="w-full bg-slate-950/80 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-200 outline-hidden focus:border-blue-500 cursor-pointer"
-          >
-            <option value="">همه تخصص‌ها ({specialties.length} تخصص فعال)</option>
-            {specialties.map(s => (
-              <option key={s.id} value={s.id}>
-                {s.name} ({s.doctorCount} پزشک)
-              </option>
-            ))}
-          </select>
-        </div>
+        <MultiSelectDropdown
+          id="filter-specialties-multiselect"
+          label="تخصص و دپارتمان پزشکی:"
+          icon={<Stethoscope className="w-3.5 h-3.5 text-blue-400" />}
+          options={specialtyOptions}
+          selectedValues={selectedSpecialties}
+          onChange={setSelectedSpecialties}
+          placeholder="همه تخصص‌ها (امکان انتخاب چندتایی)"
+          searchPlaceholder="جستجو در تخصص‌ها..."
+          unitLabel="تخصص"
+        />
 
-        {/* 2. Clinic Branch & Location */}
-        <div className="space-y-1.5">
-          <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-            <Building2 className="w-3.5 h-3.5 text-blue-400" />
-            <span>شعبه یا کلینیک درمانی:</span>
-          </label>
-          <select
-            value={branchId}
-            onChange={e => setBranchId(e.target.value)}
-            className="w-full bg-slate-950/80 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-200 outline-hidden focus:border-blue-500 cursor-pointer"
-          >
-            <option value="">همه شعب همرا کلینیک</option>
-            {branches.map(b => (
-              <option key={b.id} value={b.id}>
-                {b.name} ({b.city} - {b.isOpenNow ? 'پذیرش فعال' : 'شبانه‌روزی'})
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* 2. Province Location */}
+        <MultiSelectDropdown
+          id="filter-provinces-multiselect"
+          label="استان محل خدمت:"
+          icon={<MapPin className="w-3.5 h-3.5 text-rose-400" />}
+          options={provinceOptions}
+          selectedValues={selectedProvinces}
+          onChange={setSelectedProvinces}
+          placeholder="همه استان‌های کشور (امکان انتخاب چندتایی)"
+          searchPlaceholder="جستجو در استان‌ها (تهران، البرز، اصفهان...)"
+          unitLabel="استان"
+        />
 
-        {/* 3. Insurance Coverage */}
-        <div className="space-y-1.5">
-          <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-            <span>بیمه پایه یا تکمیلی طرف قرارداد:</span>
-          </label>
-          <select
-            value={insurance}
-            onChange={e => setInsurance(e.target.value)}
-            className="w-full bg-slate-950/80 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-200 outline-hidden focus:border-blue-500 cursor-pointer"
-          >
-            <option value="">همه بیمه‌ها (بدون محدودیت بیمه)</option>
-            <optgroup label="بیمه‌های پایه">
-              {MOCK_INSURANCES.filter(i => i.type === 'basic').map(ins => (
-                <option key={ins.id} value={ins.name}>
-                  {ins.name} ({ins.coverageCoPayPercent}٪ پوشش آنلاین)
-                </option>
-              ))}
-            </optgroup>
-            <optgroup label="بیمه‌های تکمیلی">
-              {MOCK_INSURANCES.filter(i => i.type !== 'basic').map(ins => (
-                <option key={ins.id} value={ins.name}>
-                  {ins.name} ({ins.coverageCoPayPercent}٪ کسر مستقیم)
-                </option>
-              ))}
-            </optgroup>
-          </select>
-        </div>
+        {/* 3. Clinic Branch & Location */}
+        <MultiSelectDropdown
+          id="filter-branches-multiselect"
+          label="شعبه یا کلینیک درمانی:"
+          icon={<Building2 className="w-3.5 h-3.5 text-blue-400" />}
+          options={branchOptions}
+          selectedValues={selectedBranches}
+          onChange={setSelectedBranches}
+          placeholder="همه شعب همرا کلینیک (امکان انتخاب چندتایی)"
+          searchPlaceholder="جستجو در شعب درمانی..."
+          unitLabel="شعبه"
+        />
 
-        {/* 4. Visit Modality */}
+        {/* 4. Insurance Coverage */}
+        <MultiSelectDropdown
+          id="filter-insurances-multiselect"
+          label="بیمه طرف قرارداد:"
+          icon={<ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />}
+          options={insuranceOptions}
+          selectedValues={selectedInsurances}
+          onChange={setSelectedInsurances}
+          placeholder="همه بیمه‌ها (امکان انتخاب چندتایی)"
+          searchPlaceholder="جستجو در نام بیمه (تأمین اجتماعی، سلامت، دانا...)"
+          unitLabel="بیمه"
+        />
+
+        {/* 5. Visit Modality */}
         <div className="space-y-1.5">
           <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
             <Video className="w-3.5 h-3.5 text-sky-400" />
@@ -452,7 +529,7 @@ export const AdvancedSearchConsole: React.FC<AdvancedSearchConsoleProps> = ({
           </div>
         </div>
 
-        {/* 5. Appointment Availability & Timing */}
+        {/* 6. Appointment Availability & Timing */}
         <div className="space-y-1.5">
           <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
             <Calendar className="w-3.5 h-3.5 text-amber-400" />
@@ -496,29 +573,39 @@ export const AdvancedSearchConsole: React.FC<AdvancedSearchConsoleProps> = ({
         <div className="flex flex-wrap items-center gap-1.5">
           <button
             type="button"
-            onClick={() => setSpecialtyId('')}
+            onClick={() => setSelectedSpecialties([])}
             className={`px-3 py-1 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-              specialtyId === ''
+              selectedSpecialties.length === 0
                 ? 'bg-blue-600/30 border-blue-500 text-blue-300'
                 : 'bg-slate-800/80 border-slate-700/80 text-slate-400 hover:text-white hover:bg-slate-800'
             }`}
           >
             همه تخصص‌ها
           </button>
-          {popularSpecialties.map(spec => (
-            <button
-              key={spec.id}
-              type="button"
-              onClick={() => setSpecialtyId(spec.id === specialtyId ? '' : spec.id)}
-              className={`px-3 py-1 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                specialtyId === spec.id
-                  ? 'bg-blue-600 border-blue-500 text-white shadow-xs'
-                  : 'bg-slate-800/80 border-slate-700/80 text-slate-300 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              {spec.name}
-            </button>
-          ))}
+          {popularSpecialties.map(spec => {
+            const isSelected = selectedSpecialties.includes(spec.id);
+            return (
+              <button
+                key={spec.id}
+                type="button"
+                onClick={() => {
+                  if (isSelected) {
+                    setSelectedSpecialties(selectedSpecialties.filter(id => id !== spec.id));
+                  } else {
+                    setSelectedSpecialties([...selectedSpecialties, spec.id]);
+                  }
+                }}
+                className={`px-3 py-1 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                  isSelected
+                    ? 'bg-blue-600 border-blue-500 text-white shadow-xs'
+                    : 'bg-slate-800/80 border-slate-700/80 text-slate-300 hover:text-white hover:bg-slate-800'
+                }`}
+              >
+                <span>{spec.name}</span>
+                {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+              </button>
+            );
+          })}
         </div>
       </div>
 

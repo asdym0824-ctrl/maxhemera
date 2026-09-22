@@ -75,6 +75,16 @@ export function getDoctorOfficialSiteUrl(doctorOrSlug?: { id?: string; slug?: st
     };
   }
 
+  if (slug === 'dr-sahand-taei' || slug === 'drsahandtaei') {
+    return {
+      url: 'https://drsahandtaei.com',
+      displayUrl: 'drsahandtaei.com',
+      isPrimary: false,
+      badgeLabel: 'دامنه و ساب‌دامنه اختصاصی',
+      subdomainOnly: 'drsahandtaei'
+    };
+  }
+
   // Other doctors: use Hamrah subdomain
   const cleanSub = slug.replace(/^(dr-)?/, '').replace(/[^a-zA-Z0-9-]/g, '').toLowerCase();
   const subdomain = `dr-${cleanSub || 'specialist'}.hemera.clinic`;

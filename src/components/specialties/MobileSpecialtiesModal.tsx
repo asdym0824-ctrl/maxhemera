@@ -180,13 +180,13 @@ export const MobileSpecialtiesModal: React.FC<MobileSpecialtiesModalProps> = ({
         <div className="flex-1 overflow-y-auto p-3.5 space-y-2 divide-y divide-slate-100/80">
           {filteredSpecialties.length > 0 ? (
             filteredSpecialties.map(spec => {
-              const isSelected = selectedSpecialtyId === spec.id;
+              const selectedList = selectedSpecialtyId ? selectedSpecialtyId.split(',').map(s => s.trim()).filter(Boolean) : [];
+              const isSelected = selectedList.includes(spec.id);
               return (
                 <div
                   key={spec.id}
                   onClick={() => {
                     onSelectSpecialty(spec);
-                    onClose();
                   }}
                   className={`pt-2 first:pt-0 p-2.5 rounded-2xl flex items-center justify-between gap-3 cursor-pointer transition-all hover:bg-blue-50/70 active:scale-[0.99] ${
                     isSelected ? 'bg-blue-50/90 border border-blue-200' : 'hover:border-slate-200'
@@ -256,12 +256,12 @@ export const MobileSpecialtiesModal: React.FC<MobileSpecialtiesModalProps> = ({
 
         {/* Footer */}
         <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 shrink-0">
-          <span>انتخاب تخصص برای نوبت‌دهی فوری</span>
+          <span>امکان انتخاب همزمان چند تخصص فعال است</span>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-bold cursor-pointer transition-colors text-xs"
+            className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold cursor-pointer transition-colors text-xs"
           >
-            بستن
+            تأیید و مشاهده نتایج
           </button>
         </div>
       </div>

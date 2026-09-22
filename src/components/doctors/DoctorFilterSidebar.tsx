@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Specialty } from '../../types';
-import { Filter, RotateCcw, Check, ShieldCheck, Sparkles, MapPin, X } from 'lucide-react';
+import { Filter, RotateCcw, Check, ShieldCheck, Sparkles, MapPin, X, Stethoscope } from 'lucide-react';
 import { MOCK_INSURANCES } from '../../data/mockData';
 import { IRAN_PROVINCES } from '../../data/provinces';
 import { InsuranceFinderModal } from '../insurance/InsuranceFinderModal';
+import { MultiSelectDropdown, MultiSelectOption } from '../search/MultiSelectDropdown';
 
 interface DoctorFilterSidebarProps {
   specialties: Specialty[];
@@ -42,6 +43,50 @@ export const DoctorFilterSidebar: React.FC<DoctorFilterSidebarProps> = ({
 
   const basicInsurances = MOCK_INSURANCES.filter(i => i.type === 'basic');
   const suppInsurances = MOCK_INSURANCES.filter(i => i.type === 'supplementary' || i.type === 'specialized');
+
+  // Multi-select option definitions
+  const provinceOptions: MultiSelectOption[] = useMemo(() => {
+    return IRAN_PROVINCES.map(p => ({
+      value: p,
+      label: p
+    }));
+  }, []);
+
+  const specialtyOptions: MultiSelectOption[] = useMemo(() => {
+    return specialties.map(s => ({
+      value: s.id,
+      label: s.name,
+      badge: `${s.doctorCount} پزشک`
+    }));
+  }, [specialties]);
+
+  const insuranceOptions: MultiSelectOption[] = useMemo(() => {
+    return [
+      ...basicInsurances.map(i => ({
+        value: i.name,
+        label: i.name,
+        group: 'بیمه‌های پایه درمانی'
+      })),
+      ...suppInsurances.map(i => ({
+        value: i.name,
+        label: i.name,
+        group: 'بیمه‌های تکمیلی و درمانی'
+      }))
+    ];
+  }, [basicInsurances, suppInsurances]);
+
+  // Parse comma-separated strings to arrays
+  const provinceValues = useMemo(() => {
+    return selectedProvince ? selectedProvince.split(',').map(p => p.trim()).filter(Boolean) : [];
+  }, [selectedProvince]);
+
+  const specialtyValues = useMemo(() => {
+    return selectedSpecialtyId ? selectedSpecialtyId.split(',').map(s => s.trim()).filter(Boolean) : [];
+  }, [selectedSpecialtyId]);
+
+  const insuranceValues = useMemo(() => {
+    return selectedInsurance ? selectedInsurance.split(',').map(i => i.trim()).filter(Boolean) : [];
+  }, [selectedInsurance]);
 
   return (
     <>
@@ -105,70 +150,92 @@ export const DoctorFilterSidebar: React.FC<DoctorFilterSidebarProps> = ({
 
         {/* Province Filter */}
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-blue-600" />
-              <span>استان محل طبابت:</span>
-            </label>
-            {selectedProvince && (
-              <button
-                type="button"
-                onClick={() => setSelectedProvince('')}
-                className="text-[10px] text-rose-600 hover:text-rose-700 font-medium flex items-center gap-0.5 cursor-pointer"
-              >
-                <X className="w-3 h-3" />
-                حذف فیلتر
-              </button>
-            )}
-          </div>
-          <select
-            id="doctor-province-filter-select"
-            value={selectedProvince}
-            onChange={e => setSelectedProvince(e.target.value)}
-            className="w-full text-xs bg-slate-50 border border-slate-200/80 rounded-xl p-2.5 text-slate-800 outline-hidden focus:ring-2 focus:ring-blue-600/30 transition-all cursor-pointer font-medium"
-          >
-            <option value="">همه استان‌ها ({IRAN_PROVINCES.length} استان)</option>
-            {IRAN_PROVINCES.map(p => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
+          <MultiSelectDropdown
+            id="sidebar-province-multi-select"
+            label="استان‌های محل طبابت:"
+            icon={<MapPin className="w-3.5 h-3.5 text-blue-600" />}
+            options={provinceOptions}
+            selectedValues={provinceValues}
+            onChange={vals => setSelectedProvince(vals.join(','))}
+            placeholder="انتخاب استان‌ها (امکان انتخاب همزمان)"
+            searchPlaceholder="جستجوی استان..."
+            unitLabel="استان"
+            variant="light"
+          />
 
-          {/* Quick province chips */}
+          {/* Quick province chips (Multi-select enabled) */}
           <div className="flex flex-wrap gap-1 pt-1">
-            {['استان تهران', 'استان البرز', 'استان اصفهان', 'استان خراسان رضوی', 'استان فارس', 'استان آذربایجان شرقی'].map(prov => (
-              <button
-                key={prov}
-                type="button"
-                onClick={() => setSelectedProvince(selectedProvince === prov ? '' : prov)}
-                className={`text-[10px] px-2 py-1 rounded-lg border transition-all cursor-pointer ${
-                  selectedProvince === prov
-                    ? 'bg-blue-600 text-white font-bold border-blue-600 shadow-xs'
-                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                }`}
-              >
-                {prov.replace('استان ', '')}
-              </button>
-            ))}
+            {['استان تهران', 'استان البرز', 'استان اصفهان', 'استان خراسان رضوی', 'استان فارس', 'استان آذربایجان شرقی'].map(prov => {
+              const isSelected = provinceValues.includes(prov);
+              return (
+                <button
+                  key={prov}
+                  type="button"
+                  onClick={() => {
+                    if (isSelected) {
+                      const next = provinceValues.filter(p => p !== prov);
+                      setSelectedProvince(next.join(','));
+                    } else {
+                      setSelectedProvince([...provinceValues, prov].join(','));
+                    }
+                  }}
+                  className={`text-[10px] px-2 py-1 rounded-lg border transition-all cursor-pointer flex items-center gap-1 ${
+                    isSelected
+                      ? 'bg-blue-600 text-white font-bold border-blue-600 shadow-xs'
+                      : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <span>{prov.replace('استان ', '')}</span>
+                  {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                </button>
+              );
+            })}
           </div>
         </div>
 
         {/* Specialty Filter */}
         <div className="space-y-2">
-          <label className="text-xs font-bold text-slate-700 block">تخصص پزشکی:</label>
-          <select
-            value={selectedSpecialtyId}
-            onChange={e => setSelectedSpecialtyId(e.target.value)}
-            className="w-full text-xs bg-slate-50 border border-slate-200/80 rounded-xl p-2.5 text-slate-800 outline-hidden focus:ring-2 focus:ring-blue-600/30"
-          >
-            <option value="">همه تخصص‌ها ({specialties.length})</option>
-            {specialties.map(s => (
-              <option key={s.id} value={s.id}>
-                {s.name} ({s.doctorCount} پزشک)
-              </option>
-            ))}
-          </select>
+          <MultiSelectDropdown
+            id="sidebar-specialty-multi-select"
+            label="تخصص‌های پزشکی:"
+            icon={<Stethoscope className="w-3.5 h-3.5 text-blue-600" />}
+            options={specialtyOptions}
+            selectedValues={specialtyValues}
+            onChange={vals => setSelectedSpecialtyId(vals.join(','))}
+            placeholder="انتخاب تخصص‌ها (امکان انتخاب همزمان)"
+            searchPlaceholder="جستجوی تخصص..."
+            unitLabel="تخصص"
+            variant="light"
+          />
+
+          {/* Quick top specialties chips */}
+          <div className="flex flex-wrap gap-1 pt-1">
+            {specialties.slice(0, 4).map(spec => {
+              const isSelected = specialtyValues.includes(spec.id);
+              return (
+                <button
+                  key={spec.id}
+                  type="button"
+                  onClick={() => {
+                    if (isSelected) {
+                      const next = specialtyValues.filter(id => id !== spec.id);
+                      setSelectedSpecialtyId(next.join(','));
+                    } else {
+                      setSelectedSpecialtyId([...specialtyValues, spec.id].join(','));
+                    }
+                  }}
+                  className={`text-[10px] px-2 py-1 rounded-lg border transition-all cursor-pointer flex items-center gap-1 ${
+                    isSelected
+                      ? 'bg-blue-600 text-white font-bold border-blue-600 shadow-xs'
+                      : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <span>{spec.name.replace('متخصص ', '').replace('فوق تخصص ', '')}</span>
+                  {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Online Consultation Toggle */}
@@ -214,28 +281,18 @@ export const DoctorFilterSidebar: React.FC<DoctorFilterSidebarProps> = ({
 
         {/* Insurance */}
         <div className="space-y-2">
-          <label className="text-xs font-bold text-slate-700 block">بیمه طرف قرارداد:</label>
-          <select
-            value={selectedInsurance}
-            onChange={e => setSelectedInsurance(e.target.value)}
-            className="w-full text-xs bg-slate-50 border border-slate-200/80 rounded-xl p-2.5 text-slate-800 outline-hidden focus:ring-2 focus:ring-blue-600/30"
-          >
-            <option value="">همه بیمه‌ها (بدون فیلتر)</option>
-            <optgroup label="بیمه‌های پایه درمانی">
-              {basicInsurances.map(ins => (
-                <option key={ins.id} value={ins.name}>
-                  {ins.name} ({ins.coverageCoPayPercent}٪ پوشش)
-                </option>
-              ))}
-            </optgroup>
-            <optgroup label="بیمه‌های تکمیلی و درمانی">
-              {suppInsurances.map(ins => (
-                <option key={ins.id} value={ins.name}>
-                  {ins.name} ({ins.coverageCoPayPercent}٪ کسر آنلاین)
-                </option>
-              ))}
-            </optgroup>
-          </select>
+          <MultiSelectDropdown
+            id="sidebar-insurance-multi-select"
+            label="بیمه‌های طرف قرارداد:"
+            icon={<ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />}
+            options={insuranceOptions}
+            selectedValues={insuranceValues}
+            onChange={vals => setSelectedInsurance(vals.join(','))}
+            placeholder="انتخاب بیمه‌ها (امکان انتخاب همزمان)"
+            searchPlaceholder="جستجوی بیمه پایه یا تکمیلی..."
+            unitLabel="بیمه"
+            variant="light"
+          />
         </div>
       </div>
 

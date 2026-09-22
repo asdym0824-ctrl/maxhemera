@@ -348,7 +348,6 @@ export const HomePage: React.FC<HomePageProps> = ({
             >
               <SlidersHorizontal className="w-3.5 h-3.5 shrink-0" />
               <span>جستجوی پیشرفته</span>
-              <span className="hidden lg:inline text-[10px] bg-blue-500/30 text-blue-200 px-1.5 py-0.2 rounded-md font-extrabold">همه فیلترها</span>
             </button>
 
             <button
@@ -557,10 +556,9 @@ export const HomePage: React.FC<HomePageProps> = ({
                   <button
                     key={ins.id}
                     onClick={() => navigate('/insurance')}
-                    className="p-2.5 bg-slate-900/80 hover:bg-slate-900 rounded-xl border border-slate-700 hover:border-emerald-500/40 text-center transition-all cursor-pointer space-y-1"
+                    className="p-3 bg-slate-900/80 hover:bg-slate-900 rounded-xl border border-slate-700 hover:border-emerald-500/40 text-center transition-all cursor-pointer flex items-center justify-center min-h-[50px]"
                   >
                     <div className="font-bold text-xs text-white">{ins.name}</div>
-                    <div className="text-[10px] text-emerald-300">{ins.discount}</div>
                   </button>
                 ))}
               </div>

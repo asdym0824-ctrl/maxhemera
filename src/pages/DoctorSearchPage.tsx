@@ -234,20 +234,31 @@ export const DoctorSearchPage: React.FC<DoctorSearchPageProps> = ({
           >
             همه تخصص‌ها
           </button>
-          {specialties.slice(0, 8).map(spec => (
-            <button
-              key={spec.id}
-              onClick={() => setSelectedSpecialtyId(spec.id)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all cursor-pointer flex items-center gap-1 ${
-                selectedSpecialtyId === spec.id
-                  ? 'bg-blue-500 text-white shadow-sm ring-2 ring-white/50'
-                  : 'bg-white/10 text-white/90 hover:bg-white/20'
-              }`}
-            >
-              <span>{spec.name.replace('متخصص ', '').replace('فوق تخصص ', '')}</span>
-              <span className="text-[10px] opacity-75">({spec.doctorCount})</span>
-            </button>
-          ))}
+          {specialties.slice(0, 8).map(spec => {
+            const currentSelected = selectedSpecialtyId ? selectedSpecialtyId.split(',').map(s => s.trim()).filter(Boolean) : [];
+            const isSelected = currentSelected.includes(spec.id);
+            return (
+              <button
+                key={spec.id}
+                onClick={() => {
+                  if (isSelected) {
+                    const next = currentSelected.filter(id => id !== spec.id);
+                    setSelectedSpecialtyId(next.join(','));
+                  } else {
+                    setSelectedSpecialtyId([...currentSelected, spec.id].join(','));
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all cursor-pointer flex items-center gap-1 ${
+                  isSelected
+                    ? 'bg-blue-500 text-white shadow-sm ring-2 ring-white/50'
+                    : 'bg-white/10 text-white/90 hover:bg-white/20'
+                }`}
+              >
+                <span>{spec.name.replace('متخصص ', '').replace('فوق تخصص ', '')}</span>
+                <span className="text-[10px] opacity-75">({spec.doctorCount})</span>
+              </button>
+            );
+          })}
           <button
             onClick={() => setIsSpecialtiesModalOpen(true)}
             className="px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 bg-blue-600/60 hover:bg-blue-600 text-white flex items-center gap-1 cursor-pointer transition-colors border border-blue-400/40"
@@ -273,23 +284,43 @@ export const DoctorSearchPage: React.FC<DoctorSearchPageProps> = ({
           >
             همه استان‌ها
           </button>
-          {['استان تهران', 'استان البرز', 'استان اصفهان', 'استان خراسان رضوی', 'استان فارس', 'استان آذربایجان شرقی', 'استان خوزستان', 'استان مازندران'].map(p => (
-            <button
-              key={p}
-              onClick={() => setSelectedProvince(selectedProvince === p ? '' : p)}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-medium shrink-0 transition-all cursor-pointer ${
-                selectedProvince === p
-                  ? 'bg-blue-500 text-white font-bold shadow-xs ring-1 ring-white/50'
-                  : 'bg-white/10 text-white/80 hover:bg-white/20'
-              }`}
-            >
-              {p.replace('استان ', '')}
-            </button>
-          ))}
+          {['استان تهران', 'استان البرز', 'استان اصفهان', 'استان خراسان رضوی', 'استان فارس', 'استان آذربایجان شرقی', 'استان خوزستان', 'استان مازندران'].map(p => {
+            const currentProvs = selectedProvince ? selectedProvince.split(',').map(x => x.trim()).filter(Boolean) : [];
+            const isSelected = currentProvs.includes(p);
+            return (
+              <button
+                key={p}
+                onClick={() => {
+                  if (isSelected) {
+                    const next = currentProvs.filter(x => x !== p);
+                    setSelectedProvince(next.join(','));
+                  } else {
+                    setSelectedProvince([...currentProvs, p].join(','));
+                  }
+                }}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-medium shrink-0 transition-all cursor-pointer ${
+                  isSelected
+                    ? 'bg-blue-500 text-white font-bold shadow-xs ring-1 ring-white/50'
+                    : 'bg-white/10 text-white/80 hover:bg-white/20'
+                }`}
+              >
+                {p.replace('استان ', '')}
+              </button>
+            );
+          })}
           <div className="relative shrink-0">
             <select
               value={selectedProvince}
-              onChange={e => setSelectedProvince(e.target.value)}
+              onChange={e => {
+                if (!e.target.value) {
+                  setSelectedProvince('');
+                } else {
+                  const currentProvs = selectedProvince ? selectedProvince.split(',').map(x => x.trim()).filter(Boolean) : [];
+                  if (!currentProvs.includes(e.target.value)) {
+                    setSelectedProvince([...currentProvs, e.target.value].join(','));
+                  }
+                }
+              }}
               className="bg-slate-800 text-white text-[11px] border border-white/20 rounded-lg px-2 py-1 outline-hidden cursor-pointer"
             >
               <option value="" className="bg-slate-900 text-white">انتخاب از ۲۸ استان...</option>
@@ -522,7 +553,11 @@ export const DoctorSearchPage: React.FC<DoctorSearchPageProps> = ({
         specialties={specialties}
         selectedSpecialtyId={selectedSpecialtyId}
         onSelectSpecialty={(spec) => {
-          setSelectedSpecialtyId(spec.id);
+          const current = selectedSpecialtyId ? selectedSpecialtyId.split(',').map(s => s.trim()).filter(Boolean) : [];
+          const next = current.includes(spec.id)
+            ? current.filter(id => id !== spec.id)
+            : [...current, spec.id];
+          setSelectedSpecialtyId(next.join(','));
           setVisibleDoctorsCount(6);
         }}
       />

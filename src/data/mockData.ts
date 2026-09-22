@@ -289,6 +289,218 @@ export const SPECIALTIES: Specialty[] = [
 
 export const MOCK_DOCTORS: Doctor[] = [
   {
+    id: 'doc-sahand-taei',
+    slug: 'dr-sahand-taei',
+    name: 'دکتر سهند طائی',
+    title: 'متخصص پوست، مو و زیبایی',
+    medicalCouncilNumber: '۲۱۹۲۰۱',
+    specialtyId: 'spec-derm',
+    specialtyName: 'پوست، مو و زیبایی',
+    avatar: 'https://media.drsahandtaei.com/doctors/sahand.JPG',
+    rating: 4.9,
+    reviewCount: 520,
+    experienceYears: 11,
+    province: 'استان اصفهان',
+    city: 'اصفهان',
+    address: 'اصفهان، خیابان توحید میانی، کوچه ۲۵ شهیدان کاظمی، مجتمع گلدیس، طبقه پنجم، واحد ۱۹',
+    bio: 'دکتر سهند طایی پزشک استاتیک پوست و مو، سابقه کاری ۱۱ ساله در حوزه استاتیک، عضو انجمن پزشکان زیبایی کانادا تورنتو، صاحب سبک در تزریقات فول فیس و جراحی های سرپایی، مدرس حوزه استاتیک و تخصصی پی ار پی و مزو، دارای مقالات رسمی در معتبرترین سایت‌های پزشکی.',
+    education: [
+      'دکترای حرفه‌ای پزشکی با شماره نظام ۲۱۹۲۰۱',
+      'عضو رسمی انجمن پزشکان زیبایی کانادا تورنتو (CAM)',
+      'مدرس دوره‌های تخصصی استاتیک، PRP و مزوتراپی',
+      'پژوهشگر و صاحب‌سبک در تزریقات کانتورینگ و اصلاح فرم چهره'
+    ],
+    services: [
+      'لیزر موهای زائد با دستگاه‌های روز دنیا',
+      'تزریق فول‌فیس و کانتورینگ چهره',
+      'کاهش وزن اصولی با تجهیزات پیشرفته',
+      'بلفاروپلاستی و جراحی‌های سرپایی پلک',
+      'تزریق بوتاکس دیسپورت و مصپورت',
+      'تزریق فیلر لب روسی، خط خنده و گونه',
+      'مزوتراپی و پی‌آرپی مو و جوانسازی پوست'
+    ],
+    detailedServices: [
+      {
+        id: 'srv-laser',
+        title: 'لیزر موهای زائد',
+        description: 'لیزر موهای زائد با دستگاه‌های روز دنیا؛ موثر، ایمن و متناسب با انواع پوست',
+        durationMinutes: 45,
+        price: 850000,
+        popular: true,
+        category: 'لیزر و جوانسازی'
+      },
+      {
+        id: 'srv-fullface',
+        title: 'تزریق فول‌فیس',
+        description: 'کانتورینگ، لیفت و اصلاح فرم صورت با فیلر و چربی بر اساس آناتومی چهره',
+        durationMinutes: 60,
+        price: 4500000,
+        popular: true,
+        category: 'تزریقات زیبایی'
+      },
+      {
+        id: 'srv-weightloss',
+        title: 'کاهش وزن',
+        description: 'کاهش وزن اصولی، با ارزیابی دقیق و برنامه‌ای متناسب با بدن شما',
+        durationMinutes: 45,
+        price: 1200000,
+        popular: true,
+        category: 'تناسب اندام'
+      },
+      {
+        id: 'srv-blepharo',
+        title: 'بلفاروپلاستی',
+        description: 'بلفاروپلاستی؛ با معاینه و ارزیابی دقیق و نتیجه کاملاً طبیعی',
+        durationMinutes: 90,
+        price: 9500000,
+        popular: true,
+        category: 'جراحی سرپایی'
+      },
+      {
+        id: 'srv-botox',
+        title: 'تزریق بوتاکس',
+        description: 'بوتاکس یکی از پروسیجرهای رایج زیبایی است؛ با انتخاب صحیح نقاط تزریق، میزان مناسب و تکنیک اجرایی استادانه',
+        durationMinutes: 30,
+        price: 1500000,
+        popular: true,
+        category: 'تزریقات زیبایی'
+      }
+    ],
+    offices: [
+      {
+        id: 'off-taei-isfahan',
+        title: 'مطب اصفهان (خیابان توحید میانی)',
+        city: 'اصفهان',
+        address: 'اصفهان، خیابان توحید میانی، کوچه ۲۵ شهیدان کاظمی، مجتمع گلدیس، طبقه پنجم، واحد ۱۹',
+        phone: '۰۹۱۳۵۱۱۵۲۳۷',
+        workingHours: 'شنبه تا پنجشنبه، ۹ تا ۱۹',
+        isPrimary: true
+      },
+      {
+        id: 'off-taei-baharestan',
+        title: 'کلینیک بهارستان (مجتمع وستا)',
+        city: 'بهارستان',
+        address: 'اصفهان، شهر بهارستان، خیابان الفت غربی، بین میدان عرفان و میدان ولیعصر، مجتمع وستا',
+        phone: '۰۳۱-۳۶۸۱۴۵۱۰',
+        workingHours: 'شنبه تا پنجشنبه، ۹ تا ۱۳ و ۱۶ تا ۲۰',
+        isPrimary: false
+      }
+    ],
+    achievements: [
+      {
+        id: 'ach-taei-1',
+        title: 'عضویت رسمی در انجمن پزشکان زیبایی کانادا تورنتو',
+        year: '۲۰۲۲',
+        issuer: 'Canadian Association of Aesthetic Medicine (CAM)',
+        description: 'کسب سرتیفیکیت بین‌المللی تزریقات پیشرفته و پروسیجرهای زیبایی',
+        category: 'membership'
+      },
+      {
+        id: 'ach-taei-2',
+        title: 'مدرس برگزیده دوره‌های تخصصی تزریقات فول‌فیس و PRP',
+        year: '۱۴۰۳',
+        issuer: 'آکادمی استاتیک پزشکی',
+        description: 'آموزش بیش از صدها پزشک در حوزه کانتورینگ صورت و مزوتراپی',
+        category: 'award'
+      },
+      {
+        id: 'ach-taei-3',
+        title: 'بیش از ۵۰۰ درمان و کانتورینگ موفق چهره بدون عوارض',
+        year: '۱۴۰۴',
+        issuer: 'کلینیک تخصصی دکتر سهند طائی',
+        description: 'رضایت ۹۹.۲ درصدی بیماران در نظرسنجی رسمی کلینیک',
+        category: 'award'
+      }
+    ],
+    faqs: [
+      {
+        id: 'faq-taei-1',
+        question: 'شرایط پرداخت اقساطی خدمات کلینیک چگونه است؟',
+        answer: 'تسهیلات اقساطی برای مبالغ بین ۳۰ تا ۱۰۰ میلیون تومان با بازپرداخت ۴ الی ۱۲ ماهه بدون ضامن پیچیده و از طریق واسطه تأمین مالی فراهم است. جهت فعال‌سازی کافیست با ۰۹۱۳۵۱۱۵۲۳۷ تماس بگیرید.',
+        category: 'شرایط اقساطی'
+      },
+      {
+        id: 'faq-taei-2',
+        question: 'آیا مشاوره پیش از انجام تزریق فیلر یا بوتاکس هزینه‌ای دارد؟',
+        answer: 'خیر، مشاوره حضوری پیش از انجام هرگونه پروسیجر به‌منظور بررسی دقیق آناتومی و تحلیل صورت توسط شخص جناب دکتر طائی کاملاً رایگان است.',
+        category: 'مشاوره و رزرو'
+      },
+      {
+        id: 'faq-taei-3',
+        question: 'ماندگاری فیلر و بوتاکس در کلینیک چقدر است؟',
+        answer: 'با توجه به استفاده انحصاری از برندهای دارای تأییدیه وزارت بهداشت (FDA / CE)، ماندگاری بوتاکس بین ۴ تا ۶ ماه و فیلرهای اسید هیالورونیک بین ۱۲ تا ۲۴ ماه است.',
+        category: 'مراقبت و ماندگاری'
+      }
+    ],
+    gallery: [
+      {
+        id: 'gal-taei-1',
+        title: 'بلفاروپلاستی ظریف و رفع افتادگی پلک',
+        imageUrl: 'https://media.drsahandtaei.com/services/drtaei-bel.png',
+        category: 'جراحی سرپایی'
+      },
+      {
+        id: 'gal-taei-2',
+        title: 'کانتورینگ و تزریق فول‌فیس چهره',
+        imageUrl: 'https://media.drsahandtaei.com/services/IMG_8780.JPG',
+        category: 'تزریقات زیبایی'
+      },
+      {
+        id: 'gal-taei-3',
+        title: 'تزریق بوتاکس و رفع خطوط اخم و پیشانی',
+        imageUrl: 'https://media.drsahandtaei.com/services/IMG_8778.JPG',
+        category: 'تزریق بوتاکس'
+      },
+      {
+        id: 'gal-taei-4',
+        title: 'لیزر موهای زائد با تکنولوژی نوین',
+        imageUrl: 'https://media.drsahandtaei.com/services/IMG_8779.JPG',
+        category: 'لیزر و جوانسازی'
+      }
+    ],
+    websiteConfig: {
+      websiteStatus: 'published',
+      websiteEnabled: true,
+      websitePublished: true,
+      websiteTheme: 'drsahandtaei-luxury',
+      brandPrimaryColor: '#0f2350',
+      brandAccentColor: '#c9a227',
+      heroTitle: 'زیبایی طبیعی، با دانش و تجربه پزشکی',
+      heroSubtitle: 'ارائه خدمات تخصصی پوست، مو و زیبایی با جدیدترین تکنولوژی‌های روز دنیا توسط دکتر سهند طائی در محیطی آرام و استاندارد',
+      shortIntroduction: 'کلینیک تخصصی پوست، مو و لیزر دکتر سهند طائی — ۱۱ سال سابقه درخشان در حوزه استاتیک، صاحب سبک در تزریقات فول‌فیس و جراحی‌های سرپایی.',
+      detailedBiography: 'دکتر سهند طائی پزشک استاتیک پوست و مو، سابقه کاری ۱۱ ساله در حوزه استاتیک، عضو انجمن پزشکان زیبایی کانادا تورنتو، صاحب سبک در تزریقات فول فیس و جراحی های سرپایی، مدرس حوزه استاتیک و تخصصی پی ار پی و مزو، دارای مقالات رسمی در سایت های معتبر پزشکی.',
+      websiteSubdomain: 'drsahandtaei.com',
+      customDomain: 'drsahandtaei.com',
+      seoTitle: 'دکتر سهند طائی | متخصص پوست، مو و زیبایی | وبسایت رسمی',
+      seoDescription: 'وبسایت رسمی دکتر سهند طائی، متخصص پوست، مو و لیزر در اصفهان. نوبت‌دهی آنلاین، شرایط اقساطی، گالری نتایج بلفاروپلاستی، تزریق فول‌فیس و بوتاکس.',
+      phone: '۰۹۱۳۵۱۱۵۲۳۷',
+      whatsapp: '09135115237',
+      email: 'info@drsahandtaei.com',
+      socialLinks: {
+        instagram: 'dr.taeiclinic',
+        whatsapp: '+989135115237',
+        phone: '09135115237'
+      },
+      sectionVisibility: {
+        about: true,
+        services: true,
+        achievements: true,
+        articles: true,
+        gallery: true,
+        faq: true,
+        reviews: true,
+        offices: true
+      }
+    },
+    supportedInsurances: ['تأمین اجتماعی', 'بیمه سلامت', 'ایران', 'دانا', 'البرز', 'آسیا', 'سامان'],
+    languages: ['فارسی', 'انگلیسی'],
+    consultationFee: 300000,
+    onlineConsultationFee: 250000,
+    hasOnlineConsultation: true,
+    nextAvailableSlot: 'امروز ۱۶:۰۰',
+    gender: 'male'
+  },
+  {
     id: 'doc-1',
     slug: 'dr-maryam-hosseini',
     name: 'دکتر مریم حسینی',

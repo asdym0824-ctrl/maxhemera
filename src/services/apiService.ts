@@ -566,13 +566,13 @@ export const apiService = {
 
   // Doctors
   async getDoctors(filters?: {
-    specialtyId?: string;
+    specialtyId?: string | string[];
     searchQuery?: string;
     hasOnlineConsultation?: boolean;
     gender?: 'male' | 'female';
-    insurance?: string;
-    province?: string;
-    branchId?: string;
+    insurance?: string | string[];
+    province?: string | string[];
+    branchId?: string | string[];
     timing?: 'all' | 'today' | 'tomorrow' | '3days' | 'evening';
     seniority?: 'all' | 'fellowship' | 'specialist' | 'experience10';
     sortBy?: 'rating' | 'experience' | 'earliest';
@@ -581,11 +581,21 @@ export const apiService = {
     let doctors = [...getStoredDoctors()];
 
     if (filters?.specialtyId) {
-      doctors = doctors.filter(d => d.specialtyId === filters.specialtyId);
+      const specList = Array.isArray(filters.specialtyId)
+        ? filters.specialtyId
+        : filters.specialtyId.split(',').map(s => s.trim()).filter(Boolean);
+      if (specList.length > 0) {
+        doctors = doctors.filter(d => specList.includes(d.specialtyId));
+      }
     }
 
     if (filters?.province) {
-      doctors = doctors.filter(d => isDoctorInProvince(d, filters.province!));
+      const provList = Array.isArray(filters.province)
+        ? filters.province
+        : filters.province.split(',').map(p => p.trim()).filter(Boolean);
+      if (provList.length > 0) {
+        doctors = doctors.filter(d => provList.some(prov => isDoctorInProvince(d, prov)));
+      }
     }
 
     if (filters?.hasOnlineConsultation) {
@@ -597,11 +607,21 @@ export const apiService = {
     }
 
     if (filters?.insurance) {
-      doctors = doctors.filter(d => supportsInsurance(d.supportedInsurances, filters.insurance));
+      const insList = Array.isArray(filters.insurance)
+        ? filters.insurance
+        : filters.insurance.split(',').map(i => i.trim()).filter(Boolean);
+      if (insList.length > 0) {
+        doctors = doctors.filter(d => insList.some(ins => supportsInsurance(d.supportedInsurances, ins)));
+      }
     }
 
     if (filters?.branchId) {
-      doctors = doctors.filter(d => !d.branchId || d.branchId === filters.branchId);
+      const branchList = Array.isArray(filters.branchId)
+        ? filters.branchId
+        : filters.branchId.split(',').map(b => b.trim()).filter(Boolean);
+      if (branchList.length > 0) {
+        doctors = doctors.filter(d => !d.branchId || branchList.includes(d.branchId));
+      }
     }
 
     if (filters?.seniority === 'fellowship') {
@@ -689,6 +709,14 @@ export const apiService = {
     found = doctors.find(d => 
       d.slug?.toLowerCase().replace(/^dr-|^dr_|^dr\./, '') === cleanNoDr
     );
+    if (found) return found;
+
+    // 3.5 Match by normalized alphanumeric (e.g. drsahandtaei === dr-sahand-taei)
+    found = doctors.find(d => {
+      const normSlug = (d.slug || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const normInput = cleanSlug.replace(/[^a-z0-9]/g, '');
+      return Boolean(normSlug && normInput && normSlug === normInput);
+    });
     if (found) return found;
 
     // 4. Match by Persian name

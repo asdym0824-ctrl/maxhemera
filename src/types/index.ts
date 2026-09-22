@@ -63,7 +63,8 @@ export type DoctorWebsiteTheme =
   | 'clinical-minimal' 
   | 'modern-specialist' 
   | 'warm-care' 
-  | 'tech-innovative';
+  | 'tech-innovative'
+  | 'drsahandtaei-luxury';
 
 export interface DoctorAchievement {
   id: string;

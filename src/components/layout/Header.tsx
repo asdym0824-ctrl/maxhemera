@@ -1373,12 +1373,13 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           {/* Insurance Finder Quick Button - Desktop/Tablet only */}
           <button
+            id="header-insurance-guide-btn"
             onClick={() => setInsuranceModalOpen(true)}
-            className="hidden md:inline-flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 text-xs font-bold px-3 py-2 rounded-xl transition-all cursor-pointer shadow-2xs"
-            title="راهنمای پزشکان و شعب بر اساس بیمه شما"
+            className="hidden md:inline-flex items-center gap-1.5 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 hover:from-emerald-100 hover:to-teal-100 text-emerald-950 border border-emerald-300/80 text-xs font-bold px-3 py-2 rounded-xl transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-98 group"
+            title="راهنمای جامع بیمه‌های طرف قرارداد و برآورد هوشمند پوشش پزشکان و شعب"
           >
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
-            <span>راهنمای بیمه</span>
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-700 group-hover:scale-110 transition-transform" />
+            <span>راهنمای بیمه‌ها</span>
           </button>
 
           {/* User Profile / Portal Menu Button */}
